@@ -970,12 +970,16 @@ compaction_capture(struct capture_control *capc, struct page *page,
 }
 #endif /* CONFIG_COMPACTION */
 
+#define list_check_buddy_is_sane(p, o) __list_check_buddy_is_sane(p, o, __LINE__)
+void __list_check_buddy_is_sane(struct page *page, int order, int line);
+
 /* Used for pages not on another list */
 static inline void add_to_free_list(struct page *page, struct zone *zone,
 				    unsigned int order, int migratetype)
 {
 	struct free_area *area = &zone->free_area[order];
 
+	list_check_buddy_is_sane(page, order);
 	list_add(&page->lru, &area->free_list[migratetype]);
 	area->nr_free++;
 }
@@ -986,6 +990,7 @@ static inline void add_to_free_list_tail(struct page *page, struct zone *zone,
 {
 	struct free_area *area = &zone->free_area[order];
 
+	list_check_buddy_is_sane(page, order);
 	list_add_tail(&page->lru, &area->free_list[migratetype]);
 	area->nr_free++;
 }
@@ -1000,6 +1005,7 @@ static inline void move_to_free_list(struct page *page, struct zone *zone,
 {
 	struct free_area *area = &zone->free_area[order];
 
+	list_check_buddy_is_sane(page, order);
 	list_move_tail(&page->lru, &area->free_list[migratetype]);
 }
 
@@ -1141,6 +1147,7 @@ continue_merging:
 	}
 
 done_merging:
+	list_check_buddy_is_sane(page, order);
 	set_buddy_order(page, order);
 
 	if (fpi_flags & FPI_TO_TAIL)
@@ -9565,3 +9572,76 @@ bool has_managed_dma(void)
 	return false;
 }
 #endif /* CONFIG_ZONE_DMA */
+
+void __list_check_buddy_low_orders(struct page *page, int order, int line)
+{
+	int nr_pages = 1 << order;
+	int i;
+
+	for (i = 1; i < nr_pages; i++) {
+		struct page *child = &page[i];
+		unsigned long child_pfn = page_to_pfn(child);
+		unsigned long pfn = page_to_pfn(page);
+		if (!PageBuddy(child))
+			continue;
+
+		printk("bad low order: %d pfns: 0x%lx 0x%lx buddy: %d/%d line=%d bo=%d\n",
+				order, pfn, child_pfn,
+				PageBuddy(page),
+				PageBuddy(child),
+				line, buddy_order(child));
+	}
+}
+
+void __list_check_buddy_high_orders(struct page *page, int order, int line)
+{
+	unsigned long pfn = page_to_pfn(page);
+
+	// Highest-order buddy pages (MAX_ORDER-1) are not
+	// merged together and can be on lists together
+	if (order >= MAX_ORDER-1)
+		return;
+
+	while (order < MAX_ORDER-1) {
+		unsigned long buddy_pfn = __find_buddy_pfn(pfn, order);
+		struct page *buddy = pfn_to_page(buddy_pfn);
+		bool bad;
+
+		// not in the buddy, don't care
+		if (!PageBuddy(buddy))
+			goto next;
+
+		// starts after me, can't possible overlap, don't care
+		if (buddy_pfn >= pfn + (1<<order))
+			goto next;
+
+		// Starts before me.  Does it cover me?
+		if (buddy_pfn + (1<<buddy_order(buddy)) <= pfn)
+			goto next;
+
+		bad = 1;
+		if (bad) {
+			printk("bad high order: %d pfns: 0x%lx 0x%lx buddy: %d/%d pib=%d line=%d bo=%d bad=%d\n",
+					order, pfn, buddy_pfn, PageBuddy(page),
+					PageBuddy(buddy),
+					page_is_buddy(page, buddy, order),
+					line,
+					buddy_order(buddy),
+					bad);
+			//WARN_ON(1);
+		}
+
+		// combine the PFNs to "move up" one order:
+		pfn = buddy_pfn & pfn;
+		page = pfn_to_page(pfn);
+	next:
+		order++;
+	}
+}
+
+
+void __list_check_buddy_is_sane(struct page *page, int order, int line)
+{
+	__list_check_buddy_high_orders(page, order, line);
+	__list_check_buddy_low_orders(page, order, line);
+}
