@@ -75,6 +75,7 @@
 #include <linux/khugepaged.h>
 #include <linux/buffer_head.h>
 #include <linux/delayacct.h>
+#include <linux/debugfs.h>
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
@@ -773,8 +774,8 @@ static enum zero_state pre_zeroed(struct page *page)
 static void set_buddy_private(struct page *page, unsigned long value)
 {
 	WARN_ON(!PageBuddy(page));
-	if (pre_zeroed(page) && !(value & BUDDY_ZEROED))
-		trace_printk("cleared BUDDY_ZEROED: pfn=%lx %lx->%lx\n", page_to_pfn(page), page->private, value);
+	//if (pre_zeroed(page) && !(value & BUDDY_ZEROED))
+	//	trace_printk("cleared BUDDY_ZEROED: pfn=%lx %lx->%lx\n", page_to_pfn(page), page->private, value);
 	set_page_private(page, value);
 }
 
@@ -900,10 +901,29 @@ void init_mem_debugging_and_hardening(void)
 #endif
 }
 
+u64 prezero_really_skip = 0;
+u64 prezero_counter = 0;
+u64 prezero_could_have_skipped = 0;
+u64 prezero_check_zero_highpage = 1;
+static int prezero_debugfs(void)
+{
+	debugfs_create_u64("prezero_really_skip", 0644, NULL, &prezero_really_skip);
+	debugfs_create_u64("prezero_counter", 0644, NULL, &prezero_counter);
+	debugfs_create_u64("prezero_check_zero_highpage", 0644, NULL, &prezero_check_zero_highpage);
+	debugfs_create_u64("prezero_could_have_skipped", 0644, NULL, &prezero_could_have_skipped);
+
+	return 0;
+}
+late_initcall(prezero_debugfs);
+
 void check_zero_highpage(struct page *page, int order, int numpages, int line, struct page *op)
 {
        int nr;
 
+	if (!prezero_check_zero_highpage)
+		return;
+
+       //trace_printk("check_zero_highpage() checked pfn=0x%lx order=%d numpages: %d from line %d\n", page_to_pfn(page), order, numpages, line);
        // big old hack, doesn't work for highmem:
        if (!memchr_inv(page_address(page), 0, PAGE_SIZE<<order))
                return;
@@ -1085,6 +1105,112 @@ static inline void del_page_from_free_list(struct page *page, struct zone *zone,
 	set_buddy_private(page, 0);
 	__ClearPageBuddy(page);
 	zone->free_area[order].nr_free--;
+}
+
+bool __zero_one_page(struct zone *zone, int order)
+{
+	struct page *page;
+	int numpages = 1<<order;
+	int i;
+	int migratetype = MIGRATE_RECLAIMABLE;
+	struct free_area *area;
+	bool did_zero = false;
+	int got_mt;
+	int order_orig;
+
+	spin_lock(&zone->lock);
+	/* mostly ripped from __rmqueue_smallest() */
+	area = &(zone->free_area[order]);
+
+	/* Look for a page to zero in all migratetypes: */
+	while (migratetype >= 0) {
+		struct list_head *lh = &area->free_list[migratetype];
+		page = get_page_from_free_area(area, migratetype);
+		got_mt = migratetype;
+		if (0) printk("page: %016llx mt: %d area: %016llx free: %ld le: %d lhp: %016llx lhn: %016llx\n", (u64)page, migratetype, (u64)area, area->nr_free,
+				list_empty(lh),
+				(u64)lh->prev,
+				(u64)lh->next
+				);
+
+		/* Was a page located that needs to be zeroed? */
+		if (page && (pre_zeroed(page) == NOT_ZEROED))
+			break;
+
+		/* No page was found to zero.  Try another migratetype. */
+		page = NULL;
+		migratetype--;
+	}
+	if (!page) {
+		spin_unlock(&zone->lock);
+		return did_zero;
+	}
+	//trace_printk("got %lx pz: %d\n", page_to_pfn(page), pre_zeroed(page));
+	order_orig = buddy_order(page);
+	//tpage(page, order);
+	del_page_from_free_list(page, zone, order);
+	spin_unlock(&zone->lock);
+
+	did_zero = true;
+	for (i = 0; i < numpages; i++) {
+		clear_highpage(page + i);
+	}
+
+	spin_lock(&zone->lock);
+	{
+		int pz_before = pre_zeroed(page);
+		int order_before = buddy_order(page);
+		int pz_after;
+		int order_after;
+
+		mark_new_buddy(page, order, PRE_ZEROED);
+		pz_after = pre_zeroed(page);
+		order_after = buddy_order(page);
+		if (0) trace_printk("done zeroing pfn=0x%lx pz: %d/%d order: %d/%d/%d/%d mt: %d/%d\n", page_to_pfn(page),
+				pz_before, pz_after, order, order_orig, order_before, order_after,
+				got_mt, migratetype);
+	}
+	add_to_free_list_tail(page, zone, order, migratetype);
+	//did_some_prezeroing = 1;
+	check_zero_highpage(page , order, 1<<order, __LINE__, page);
+	spin_unlock(&zone->lock);
+	return did_zero;
+}
+
+
+int zero_pages(struct zone *zone, int order, int do_count)
+{
+	int count = 0;
+
+	while (__zero_one_page(zone, order)) {
+		cond_resched();
+		count++;
+		// arbitrary limit to keep this from
+		// taking insane amounts of time:
+		if (count >= do_count)
+			break;
+	}
+
+	trace_printk("zeroed %5d order %2d pages in %s\n",
+			count, order, zone->name);
+	//printk("zeroed %5d order %2d pages in %s\n",
+	//		count, order, zone->name);
+
+	return count;
+}
+
+void zero_some_pages(struct zone *zone, int pages)
+{
+	int order;
+	long zero_count = 0;
+
+	for (order = MAX_ORDER-1; order >= 1; order--) {
+		long did = zero_pages(zone, order, pages);
+		zero_count += did << order;
+		if (zero_count > pages)
+			break;
+	}
+	printk("zeroed %6ld pages in %s\n", zero_count, zone->name);
 }
 
 /*
@@ -1357,12 +1483,20 @@ static void kernel_init_free_pages(struct page *page, int numpages, bool zero_ta
 	kasan_disable_current();
 	for (i = 0; i < numpages; i++) {
 		u8 tag = page_kasan_tag(page + i);
+		bool need_to_zero = true;
+
 		page_kasan_tag_reset(page + i);
 		if (pre_zeroed(page) == PRE_ZEROED) {
 			check_zero_highpage(page, ilog2(numpages), numpages, __LINE__, page);
-			trace_printk("would have skipped zero\n");
+			//trace_printk("would have skipped zero\n");
+			if (prezero_really_skip)
+				need_to_zero = false;
+			prezero_could_have_skipped++;
 		}
-		clear_highpage(page + i);
+		if (need_to_zero)
+			clear_highpage(page + i);
+		else
+			prezero_counter++;
 		page_kasan_tag_set(page + i, tag);
 	}
 	kasan_enable_current();
