@@ -1147,7 +1147,7 @@ bool __zero_one_page(struct zone *zone, int order)
 	}
 	//trace_printk("got %lx pz: %d\n", page_to_pfn(page), pre_zeroed(page));
 	order_orig = buddy_order(page);
-	//tpage(page, order);
+	tpage(page, order);
 	del_page_from_free_list(page, zone, order);
 	spin_unlock(&zone->lock);
 
@@ -1625,9 +1625,9 @@ static inline bool extra_debug_free(void)
  */
 static bool free_pcp_prepare(struct page *page, unsigned int order)
 {
-	//tpage(page, order);
+	tpage(page, order);
 	page->private = 0;
-	//tpage(page, order);
+	tpage(page, order);
 
 	return free_pages_prepare(page, order, extra_debug_free(), FPI_NONE);
 }
@@ -1642,7 +1642,7 @@ static bool free_pcp_prepare(struct page *page, unsigned int order)
 static bool bulkfree_pcp_prepare(struct page *page, int order)
 {
 	unsigned long private = page->private;
-	//tpage(page, order);
+	tpage(page, order);
 
 	/*
 	 * Only BUDDY_ZEROED should be set in page->private at
@@ -1652,7 +1652,7 @@ static bool bulkfree_pcp_prepare(struct page *page, int order)
 	if ((private & ~BUDDY_ZEROED) && printk_ratelimit()) {
 		printk("%s()::%d %lx\n", __func__, __LINE__, page->private);
 		page->private = 0;
-		//tpage(page, order);
+		tpage(page, order);
 	}
 
 	if (extra_debug_free())
