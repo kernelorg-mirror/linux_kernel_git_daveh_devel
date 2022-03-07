@@ -96,6 +96,16 @@ static void split_map_pages(struct list_head *list)
 		order = page_private(page);
 		nr_pages = 1 << order;
 
+		WARN_ON(PageBuddy(page));
+		// These pages recent came out of the buddy but
+		// they should have come via __isolate_free_page()
+		// which does del_page_from_free_list().  That
+		// should have left PageBuddy() clear.
+		// page_order() metadata was left presumably so
+		// that we could do this split and map here.  It
+		// is likely no longer needed.  Zap it to keep
+		// post_alloc_hook() from complaining.
+		page->private = 0;
 		post_alloc_hook(page, order, __GFP_MOVABLE);
 		if (order)
 			split_page(page, order);
