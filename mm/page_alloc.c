@@ -880,7 +880,7 @@ void init_mem_debugging_and_hardening(void)
 #endif
 }
 
-static inline void set_buddy_order(struct page *page, unsigned int order)
+static inline void mark_buddy(struct page *page, unsigned int order)
 {
 	set_page_private(page, order);
 	__SetPageBuddy(page);
@@ -1148,7 +1148,7 @@ continue_merging:
 
 done_merging:
 	list_check_buddy_is_sane(page, order);
-	set_buddy_order(page, order);
+	mark_buddy(page, order);
 
 	if (fpi_flags & FPI_TO_TAIL)
 		to_tail = true;
@@ -2320,7 +2320,7 @@ static inline void expand(struct zone *zone, struct page *page,
 			continue;
 
 		add_to_free_list(&page[size], zone, high, migratetype);
-		set_buddy_order(&page[size], high);
+		mark_buddy(&page[size], high);
 	}
 }
 
@@ -9489,7 +9489,7 @@ static void break_down_buddy_pages(struct zone *zone, struct page *page,
 
 		if (current_buddy != target) {
 			add_to_free_list(current_buddy, zone, high, migratetype);
-			set_buddy_order(current_buddy, high);
+			mark_buddy(current_buddy, high);
 			page = next_page;
 		}
 	}
