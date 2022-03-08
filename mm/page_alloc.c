@@ -880,11 +880,25 @@ void init_mem_debugging_and_hardening(void)
 #endif
 }
 
-static inline void mark_buddy(struct page *page, unsigned int order)
+/*
+ * Only use this for pages which are new to the buddy allocator.
+ * They should not yet have PageBuddy() set.
+ */
+static inline void mark_new_buddy(struct page *page, unsigned int order)
 {
+	WARN_ON(PageBuddy(page));
 	set_page_private(page, order);
 	__SetPageBuddy(page);
 }
+
+/*
+static inline void change_buddy_order(struct page *page, unsigned int order)
+{
+	WARN_ON(!PageBuddy(page));
+	set_page_private(page, order);
+	__SetPageBuddy(page);
+}
+*/
 
 /*
  * This function checks whether a page is free && is the buddy
@@ -1148,7 +1162,7 @@ continue_merging:
 
 done_merging:
 	list_check_buddy_is_sane(page, order);
-	mark_buddy(page, order);
+	mark_new_buddy(page, order);
 
 	if (fpi_flags & FPI_TO_TAIL)
 		to_tail = true;
@@ -2320,7 +2334,7 @@ static inline void expand(struct zone *zone, struct page *page,
 			continue;
 
 		add_to_free_list(&page[size], zone, high, migratetype);
-		mark_buddy(&page[size], high);
+		mark_new_buddy(&page[size], high);
 	}
 }
 
@@ -9489,7 +9503,7 @@ static void break_down_buddy_pages(struct zone *zone, struct page *page,
 
 		if (current_buddy != target) {
 			add_to_free_list(current_buddy, zone, high, migratetype);
-			mark_buddy(current_buddy, high);
+			mark_new_buddy(current_buddy, high);
 			page = next_page;
 		}
 	}
