@@ -898,6 +898,28 @@ void init_mem_debugging_and_hardening(void)
 #endif
 }
 
+void check_zero_highpage(struct page *page, int order, int numpages, int line, struct page *op)
+{
+       int nr;
+
+       // big old hack, doesn't work for highmem:
+       if (!memchr_inv(page_address(page), 0, PAGE_SIZE<<order))
+               return;
+       BUILD_BUG_ON(IS_ENABLED(CONFIG_HIGHMEM));
+
+       printk("check_zero_highpage() BAD pfn=0x%lx/%d numpages: %d from line %d\n", page_to_pfn(page), order, numpages, line);
+       trace_printk("check_zero_highpage() BAD pfn=0x%lx order=%d numpages: %d from line %d\n", page_to_pfn(page), order, numpages, line);
+       trace_printk("check_zero_highpage() real pfn=0x%lx\n", page_to_pfn(op));
+       tracing_off();
+       WARN_ON(1);
+       for (nr = 0; nr < 1<<order; nr++) {
+               struct page *tmp = &page[nr];
+               if (PageBuddy(tmp))
+                       printk("page[0x%x] had PageBuddy pfn=0x%lx\n", nr, page_to_pfn(tmp));
+               clear_highpage(&page[nr]);
+       }
+}
+
 /*
  * Only use this for pages which are new to the buddy allocator.
  * They should not yet have PageBuddy() set.
@@ -909,8 +931,10 @@ static inline void mark_new_buddy(struct page *page, unsigned int order,
 
 	WARN_ON(PageBuddy(page));
 
-	if (zero == PRE_ZEROED)
+	if (zero == PRE_ZEROED) {
 		private |= BUDDY_ZEROED;
+		check_zero_highpage(page, order, 1<<order, __LINE__, page);
+	}
 
 	__SetPageBuddy(page);
 	set_buddy_private(page, private);
@@ -1332,8 +1356,9 @@ static void kernel_init_free_pages(struct page *page, int numpages, bool zero_ta
 	for (i = 0; i < numpages; i++) {
 		u8 tag = page_kasan_tag(page + i);
 		page_kasan_tag_reset(page + i);
-		if (pre_zeroed(page) != PRE_ZEROED)
-			clear_highpage(page + i);
+		if (pre_zeroed(page) == PRE_ZEROED)
+			check_zero_highpage(page, ilog2(numpages), numpages, __LINE__, page);
+		clear_highpage(page + i);
 		page_kasan_tag_set(page + i, tag);
 	}
 	kasan_enable_current();
