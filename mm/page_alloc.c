@@ -758,6 +758,12 @@ void prep_compound_page(struct page *page, unsigned int order)
 	prep_compound_head(page, order);
 }
 
+static void set_buddy_private(struct page *page, unsigned long value)
+{
+	WARN_ON(!PageBuddy(page));
+	set_page_private(page, value);
+}
+
 #ifdef CONFIG_DEBUG_PAGEALLOC
 unsigned int _debug_guardpage_minorder;
 
@@ -800,7 +806,7 @@ static inline bool set_page_guard(struct zone *zone, struct page *page,
 
 	__SetPageGuard(page);
 	INIT_LIST_HEAD(&page->lru);
-	set_page_private(page, order);
+	set_buddy_private(page, order);
 	/* Guard pages are not available for any usage */
 	__mod_zone_freepage_state(zone, -(1 << order), migratetype);
 
@@ -815,7 +821,7 @@ static inline void clear_page_guard(struct zone *zone, struct page *page,
 
 	__ClearPageGuard(page);
 
-	set_page_private(page, 0);
+	set_buddy_private(page, 0);
 	if (!is_migrate_isolate(migratetype))
 		__mod_zone_freepage_state(zone, (1 << order), migratetype);
 }
@@ -887,16 +893,16 @@ void init_mem_debugging_and_hardening(void)
 static inline void mark_new_buddy(struct page *page, unsigned int order)
 {
 	WARN_ON(PageBuddy(page));
-	set_page_private(page, order);
 	__SetPageBuddy(page);
+	set_buddy_private(page, order);
 }
 
 /*
 static inline void change_buddy_order(struct page *page, unsigned int order)
 {
 	WARN_ON(!PageBuddy(page));
-	set_page_private(page, order);
 	__SetPageBuddy(page);
+	set_page_private(page, order);
 }
 */
 
@@ -1031,8 +1037,8 @@ static inline void del_page_from_free_list(struct page *page, struct zone *zone,
 		__ClearPageReported(page);
 
 	list_del(&page->lru);
+	set_buddy_private(page, 0);
 	__ClearPageBuddy(page);
-	set_page_private(page, 0);
 	zone->free_area[order].nr_free--;
 }
 
@@ -2413,10 +2419,19 @@ static bool check_new_pages(struct page *page, unsigned int order)
 	return false;
 }
 
-inline void post_alloc_hook(struct page *page, unsigned int order,
+noinline void post_alloc_hook(struct page *page, unsigned int order,
 				gfp_t gfp_flags)
 {
-	set_page_private(page, 0);
+	if (page->private && printk_ratelimit()) {
+		printk("%s()::%d %lx\n", __func__, __LINE__, page->private);
+		page->private = 0;
+		/*
+		 * PageBuddy() is clear.  This trips the
+		 * PageBuddy check in set_buddy_private().
+		 */
+		//set_buddy_private(page, 0);
+		dump_stack();
+	}
 	set_page_refcounted(page);
 
 	arch_alloc_page(page, order);
@@ -2449,7 +2464,7 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
 	page_table_check_alloc(page, order);
 }
 
-static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
+static noinline void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
 							unsigned int alloc_flags)
 {
 	post_alloc_hook(page, order, gfp_flags);
@@ -3664,6 +3679,19 @@ struct page *__rmqueue_pcplist(struct zone *zone, unsigned int order,
 		pcp->count -= 1 << order;
 	} while (check_new_pcp(page));
 
+	/*
+	 * These may never have been PageBuddy() pages.  The
+	 * page->private data can not be trusted for prezering.
+	 * Zap it.
+	 *
+	 * This might loose pre-zeroing state if the page just
+	 * came out of the buddy.  That's unfortunate, but fixing
+	 * it requires being able to differentiate PCP pages that
+	 * came out of the buddy where we can trust page->private
+	 * versus those that were populated to the PCP lists
+	 * from a free where we can't trust it.
+	 */
+	page->private = 0;
 	return page;
 }
 
