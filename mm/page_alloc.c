@@ -758,6 +758,11 @@ void prep_compound_page(struct page *page, unsigned int order)
 	prep_compound_head(page, order);
 }
 
+static bool pre_zeroed(struct page *page)
+{
+	return page_private(page) & BUDDY_ZEROED;
+}
+
 static void set_buddy_private(struct page *page, unsigned long value)
 {
 	WARN_ON(!PageBuddy(page));
@@ -1313,7 +1318,8 @@ static void kernel_init_free_pages(struct page *page, int numpages, bool zero_ta
 	for (i = 0; i < numpages; i++) {
 		u8 tag = page_kasan_tag(page + i);
 		page_kasan_tag_reset(page + i);
-		clear_highpage(page + i);
+		if (!pre_zeroed(page))
+			clear_highpage(page + i);
 		page_kasan_tag_set(page + i, tag);
 	}
 	kasan_enable_current();
