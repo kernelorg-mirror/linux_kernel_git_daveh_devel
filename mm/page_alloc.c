@@ -758,9 +758,16 @@ void prep_compound_page(struct page *page, unsigned int order)
 	prep_compound_head(page, order);
 }
 
-static bool pre_zeroed(struct page *page)
+enum zero_state {
+	NOT_ZEROED,
+	PRE_ZEROED
+};
+
+static enum zero_state pre_zeroed(struct page *page)
 {
-	return page_private(page) & BUDDY_ZEROED;
+	if (page_private(page) & BUDDY_ZEROED)
+		return PRE_ZEROED;
+	return NOT_ZEROED;
 }
 
 static void set_buddy_private(struct page *page, unsigned long value)
@@ -895,11 +902,18 @@ void init_mem_debugging_and_hardening(void)
  * Only use this for pages which are new to the buddy allocator.
  * They should not yet have PageBuddy() set.
  */
-static inline void mark_new_buddy(struct page *page, unsigned int order)
+static inline void mark_new_buddy(struct page *page, unsigned int order,
+				  enum zero_state zero)
 {
+	unsigned long private = order;
+
 	WARN_ON(PageBuddy(page));
+
+	if (zero == PRE_ZEROED)
+		private |= BUDDY_ZEROED;
+
 	__SetPageBuddy(page);
-	set_buddy_private(page, order);
+	set_buddy_private(page, private);
 }
 
 /*
@@ -1173,7 +1187,7 @@ continue_merging:
 
 done_merging:
 	list_check_buddy_is_sane(page, order);
-	mark_new_buddy(page, order);
+	mark_new_buddy(page, order, NOT_ZEROED);
 
 	if (fpi_flags & FPI_TO_TAIL)
 		to_tail = true;
@@ -1318,7 +1332,7 @@ static void kernel_init_free_pages(struct page *page, int numpages, bool zero_ta
 	for (i = 0; i < numpages; i++) {
 		u8 tag = page_kasan_tag(page + i);
 		page_kasan_tag_reset(page + i);
-		if (!pre_zeroed(page))
+		if (pre_zeroed(page) != PRE_ZEROED)
 			clear_highpage(page + i);
 		page_kasan_tag_set(page + i, tag);
 	}
@@ -2330,6 +2344,7 @@ static inline void expand(struct zone *zone, struct page *page,
 	int low, int high, int migratetype)
 {
 	unsigned long size = 1 << high;
+	enum zero_state page_prezeroed = pre_zeroed(page);
 
 	while (high > low) {
 		high--;
@@ -2346,7 +2361,7 @@ static inline void expand(struct zone *zone, struct page *page,
 			continue;
 
 		add_to_free_list(&page[size], zone, high, migratetype);
-		mark_new_buddy(&page[size], high);
+		mark_new_buddy(&page[size], high, page_prezeroed);
 	}
 }
 
@@ -9537,7 +9552,9 @@ static void break_down_buddy_pages(struct zone *zone, struct page *page,
 
 		if (current_buddy != target) {
 			add_to_free_list(current_buddy, zone, high, migratetype);
-			mark_new_buddy(current_buddy, high);
+			// This is very rare.  Do not bother
+			// trying to preserve zero state:
+			mark_new_buddy(current_buddy, high, NOT_ZEROED);
 			page = next_page;
 		}
 	}
