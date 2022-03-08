@@ -2669,9 +2669,6 @@ static void proactive_compact_node(pg_data_t *pgdat)
 }
 
 void zero_some_pages(struct zone *z, int pages);
-void zero_some_pages(struct zone *z, int pages)
-{
-}
 
 static void zero_nodes(int pages)
 {
