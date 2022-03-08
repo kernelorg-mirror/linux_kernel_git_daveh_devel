@@ -1376,6 +1376,11 @@ static __always_inline bool free_pages_prepare(struct page *page,
 			ClearPageHasHWPoisoned(page);
 		}
 		for (i = 1; i < (1 << order); i++) {
+			/*
+			 * This will leave BUDDY_ZEROED in place
+			 * in tail pages.  It should get cleared
+			 * up before anyone notices in expand().
+			 */
 			if (compound)
 				bad += free_tail_pages_check(page, page + i);
 			if (unlikely(check_free_page(page + i))) {
