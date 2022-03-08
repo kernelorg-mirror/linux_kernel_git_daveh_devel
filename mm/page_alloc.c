@@ -1491,6 +1491,10 @@ static inline bool extra_debug_free(void)
  */
 static bool free_pcp_prepare(struct page *page, unsigned int order)
 {
+	//tpage(page, order);
+	page->private = 0;
+	//tpage(page, order);
+
 	return free_pages_prepare(page, order, extra_debug_free(), FPI_NONE);
 }
 
@@ -1501,8 +1505,22 @@ static bool free_pcp_prepare(struct page *page, unsigned int order)
  * allocator via free_pcp_prepare().  Check them again if one the extra free
  * debugging checks are on.
  */
-static bool bulkfree_pcp_prepare(struct page *page)
+static bool bulkfree_pcp_prepare(struct page *page, int order)
 {
+	unsigned long private = page->private;
+	//tpage(page, order);
+
+	/*
+	 * Only BUDDY_ZEROED should be set in page->private at
+	 * this point.  If any other bit is set, we have uno
+	 * problemo.
+	 */
+	if ((private & ~BUDDY_ZEROED) && printk_ratelimit()) {
+		printk("%s()::%d %lx\n", __func__, __LINE__, page->private);
+		page->private = 0;
+		//tpage(page, order);
+	}
+
 	if (extra_debug_free())
 		return check_free_page(page);
 	else
@@ -1570,7 +1588,7 @@ static void free_pcppages_bulk(struct zone *zone, int count,
 			nr_freed += 1 << order;
 			count -= 1 << order;
 
-			if (bulkfree_pcp_prepare(page))
+			if (bulkfree_pcp_prepare(page, order))
 				continue;
 
 			/* Encode order with the migratetype */
@@ -2472,8 +2490,8 @@ static bool check_new_pages(struct page *page, unsigned int order)
 noinline void post_alloc_hook(struct page *page, unsigned int order,
 				gfp_t gfp_flags)
 {
-	if (page->private && printk_ratelimit()) {
-		printk("%s()::%d %lx\n", __func__, __LINE__, page->private);
+	if ((page->private & ~BUDDY_ZEROED) && printk_ratelimit()) {
+		printk("%s()::%d BAD page private: priv=%lx\n", __func__, __LINE__, page->private);
 		page->private = 0;
 		/*
 		 * PageBuddy() is clear.  This trips the
@@ -3746,19 +3764,6 @@ struct page *__rmqueue_pcplist(struct zone *zone, unsigned int order,
 		pcp->count -= 1 << order;
 	} while (check_new_pcp(page));
 
-	/*
-	 * These may never have been PageBuddy() pages.  The
-	 * page->private data can not be trusted for prezering.
-	 * Zap it.
-	 *
-	 * This might loose pre-zeroing state if the page just
-	 * came out of the buddy.  That's unfortunate, but fixing
-	 * it requires being able to differentiate PCP pages that
-	 * came out of the buddy where we can trust page->private
-	 * versus those that were populated to the PCP lists
-	 * from a free where we can't trust it.
-	 */
-	page->private = 0;
 	return page;
 }
 
