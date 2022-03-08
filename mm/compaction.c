@@ -2658,6 +2658,51 @@ static void proactive_compact_node(pg_data_t *pgdat)
 	}
 }
 
+void zero_some_pages(struct zone *z, int pages);
+void zero_some_pages(struct zone *z, int pages)
+{
+}
+
+static void zero_nodes(int pages)
+{
+	int nid;
+
+	for_each_online_node(nid) {
+		pg_data_t *pgdat = NODE_DATA(nid);
+		int zoneid;
+
+		for (zoneid = 0; zoneid < MAX_NR_ZONES; zoneid++) {
+			struct zone *zone = &pgdat->node_zones[zoneid];
+                	if (!populated_zone(zone))
+                        	continue;
+
+			zero_some_pages(zone, pages);
+		}
+	}
+}
+
+int sysctl_zero_pages;
+
+int sysctl_zero_handler(struct ctl_table *table, int write,
+			void *buffer, size_t *length, loff_t *ppos)
+{
+	int rc;
+	int old = sysctl_zero_pages;
+
+	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (rc)
+		return rc;
+
+	printk("%s() %d -> %d\n", __func__, old, sysctl_zero_pages);
+
+	if (write)
+		zero_nodes(sysctl_zero_pages);
+
+	return 0;
+}
+
+
+
 /* Compact all zones within a node */
 static void compact_node(int nid)
 {
