@@ -166,20 +166,17 @@ TRACE_EVENT(mm_page_free,
 	TP_STRUCT__entry(
 		__field(	unsigned long,	pfn		)
 		__field(	unsigned int,	order		)
-		__field(	unsigned long,	priv		)
 	),
 
 	TP_fast_assign(
 		__entry->pfn		= page_to_pfn(page);
 		__entry->order		= order;
-		__entry->priv		= page->private;
 	),
 
-	TP_printk("page=%p pfn=0x%lx order=%d priv=0x%lx",
+	TP_printk("page=%p pfn=0x%lx order=%d",
 			pfn_to_page(__entry->pfn),
 			__entry->pfn,
-			__entry->order,
-			__entry->priv)
+			__entry->order)
 );
 
 TRACE_EVENT(mm_page_free_batched,
@@ -190,18 +187,15 @@ TRACE_EVENT(mm_page_free_batched,
 
 	TP_STRUCT__entry(
 		__field(	unsigned long,	pfn		)
-		__field(	unsigned long,	priv		)
 	),
 
 	TP_fast_assign(
 		__entry->pfn		= page_to_pfn(page);
-		__entry->priv		= page->private;
 	),
 
-	TP_printk("page=%p pfn=0x%lx order=0 priv=0x%lx",
+	TP_printk("page=%p pfn=0x%lx order=0",
 			pfn_to_page(__entry->pfn),
-			__entry->pfn,
-			__entry->priv)
+			__entry->pfn)
 );
 
 TRACE_EVENT(mm_page_alloc,
@@ -213,7 +207,6 @@ TRACE_EVENT(mm_page_alloc,
 
 	TP_STRUCT__entry(
 		__field(	unsigned long,	pfn		)
-		__field(	unsigned long,	priv		)
 		__field(	unsigned int,	order		)
 		__field(	gfp_t,		gfp_flags	)
 		__field(	int,		migratetype	)
@@ -224,16 +217,14 @@ TRACE_EVENT(mm_page_alloc,
 		__entry->order		= order;
 		__entry->gfp_flags	= gfp_flags;
 		__entry->migratetype	= migratetype;
-		__entry->priv		= page ? page->private : 0x11179;
 	),
 
-	TP_printk("page=%p pfn=0x%lx order=%d migratetype=%d gfp_flags=%s priv=0x%lx",
+	TP_printk("page=%p pfn=0x%lx order=%d migratetype=%d gfp_flags=%s",
 		__entry->pfn != -1UL ? pfn_to_page(__entry->pfn) : NULL,
 		__entry->pfn != -1UL ? __entry->pfn : 0,
 		__entry->order,
 		__entry->migratetype,
-		show_gfp_flags(__entry->gfp_flags),
-		__entry->priv)
+		show_gfp_flags(__entry->gfp_flags))
 );
 
 DECLARE_EVENT_CLASS(mm_page,
@@ -244,27 +235,22 @@ DECLARE_EVENT_CLASS(mm_page,
 
 	TP_STRUCT__entry(
 		__field(	unsigned long,	pfn		)
-		__field(	unsigned long,	priv		)
 		__field(	unsigned int,	order		)
 		__field(	int,		migratetype	)
 	),
 
 	TP_fast_assign(
 		__entry->pfn		= page ? page_to_pfn(page) : -1UL;
-		__entry->priv		= page ? page->private : 0x11179;
 		__entry->order		= order;
 		__entry->migratetype	= migratetype;
-		__entry->priv = migratetype;
 	),
 
-	TP_printk("page=%p pfn=0x%lx order=%u migratetype=%d percpu_refill=%d priv=0x%lx",
+	TP_printk("page=%p pfn=0x%lx order=%u migratetype=%d percpu_refill=%d",
 		__entry->pfn != -1UL ? pfn_to_page(__entry->pfn) : NULL,
 		__entry->pfn != -1UL ? __entry->pfn : 0,
 		__entry->order,
 		__entry->migratetype,
-		__entry->order == 0,
-		__entry->priv
-		)
+		__entry->order == 0)
 );
 
 DEFINE_EVENT(mm_page, mm_page_alloc_zone_locked,
@@ -284,20 +270,17 @@ TRACE_EVENT(mm_page_pcpu_drain,
 		__field(	unsigned long,	pfn		)
 		__field(	unsigned int,	order		)
 		__field(	int,		migratetype	)
-		__field(	unsigned long,	priv		)
 	),
 
 	TP_fast_assign(
 		__entry->pfn		= page ? page_to_pfn(page) : -1UL;
 		__entry->order		= order;
 		__entry->migratetype	= migratetype;
-		__entry->priv		= page->private;
 	),
 
-	TP_printk("page=%p pfn=0x%lx order=%d migratetype=%d priv=0x%lx",
+	TP_printk("page=%p pfn=0x%lx order=%d migratetype=%d",
 		pfn_to_page(__entry->pfn), __entry->pfn,
-		__entry->order, __entry->migratetype,
-		__entry->priv)
+		__entry->order, __entry->migratetype)
 );
 
 TRACE_EVENT(mm_page_alloc_extfrag,
@@ -312,7 +295,6 @@ TRACE_EVENT(mm_page_alloc_extfrag,
 
 	TP_STRUCT__entry(
 		__field(	unsigned long,	pfn			)
-		__field(	unsigned long,	priv			)
 		__field(	int,		alloc_order		)
 		__field(	int,		fallback_order		)
 		__field(	int,		alloc_migratetype	)
@@ -326,12 +308,11 @@ TRACE_EVENT(mm_page_alloc_extfrag,
 		__entry->fallback_order		= fallback_order;
 		__entry->alloc_migratetype	= alloc_migratetype;
 		__entry->fallback_migratetype	= fallback_migratetype;
-		__entry->priv			= page->private;
 		__entry->change_ownership	= (alloc_migratetype ==
 					get_pageblock_migratetype(page));
 	),
 
-	TP_printk("page=%p pfn=0x%lx alloc_order=%d fallback_order=%d pageblock_order=%d alloc_migratetype=%d fallback_migratetype=%d fragmenting=%d change_ownership=%d priv=0x%lx",
+	TP_printk("page=%p pfn=0x%lx alloc_order=%d fallback_order=%d pageblock_order=%d alloc_migratetype=%d fallback_migratetype=%d fragmenting=%d change_ownership=%d",
 		pfn_to_page(__entry->pfn),
 		__entry->pfn,
 		__entry->alloc_order,
@@ -340,8 +321,7 @@ TRACE_EVENT(mm_page_alloc_extfrag,
 		__entry->alloc_migratetype,
 		__entry->fallback_migratetype,
 		__entry->fallback_order < pageblock_order,
-		__entry->change_ownership,
-		__entry->priv)
+		__entry->change_ownership)
 );
 
 /*

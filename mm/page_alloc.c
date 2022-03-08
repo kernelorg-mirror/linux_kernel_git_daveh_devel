@@ -75,7 +75,6 @@
 #include <linux/khugepaged.h>
 #include <linux/buffer_head.h>
 #include <linux/delayacct.h>
-#include <linux/debugfs.h>
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
@@ -759,26 +758,6 @@ void prep_compound_page(struct page *page, unsigned int order)
 	prep_compound_head(page, order);
 }
 
-enum zero_state {
-	NOT_ZEROED,
-	PRE_ZEROED
-};
-
-static enum zero_state pre_zeroed(struct page *page)
-{
-	if (page_private(page) & BUDDY_ZEROED)
-		return PRE_ZEROED;
-	return NOT_ZEROED;
-}
-
-static void set_buddy_private(struct page *page, unsigned long value)
-{
-	WARN_ON(!PageBuddy(page));
-	//if (pre_zeroed(page) && !(value & BUDDY_ZEROED))
-	//	trace_printk("cleared BUDDY_ZEROED: pfn=%lx %lx->%lx\n", page_to_pfn(page), page->private, value);
-	set_page_private(page, value);
-}
-
 #ifdef CONFIG_DEBUG_PAGEALLOC
 unsigned int _debug_guardpage_minorder;
 
@@ -821,7 +800,7 @@ static inline bool set_page_guard(struct zone *zone, struct page *page,
 
 	__SetPageGuard(page);
 	INIT_LIST_HEAD(&page->lru);
-	set_buddy_private(page, order);
+	set_page_private(page, order);
 	/* Guard pages are not available for any usage */
 	__mod_zone_freepage_state(zone, -(1 << order), migratetype);
 
@@ -836,7 +815,7 @@ static inline void clear_page_guard(struct zone *zone, struct page *page,
 
 	__ClearPageGuard(page);
 
-	set_buddy_private(page, 0);
+	set_page_private(page, 0);
 	if (!is_migrate_isolate(migratetype))
 		__mod_zone_freepage_state(zone, (1 << order), migratetype);
 }
@@ -901,79 +880,11 @@ void init_mem_debugging_and_hardening(void)
 #endif
 }
 
-u64 prezero_really_skip = 0;
-u64 prezero_counter = 0;
-u64 prezero_could_have_skipped = 0;
-u64 prezero_check_zero_highpage = 1;
-u64 prezero_buddy_sane_checks = 0;
-u64 prezero_buddy_order = 9;
-static int prezero_debugfs(void)
+static inline void set_buddy_order(struct page *page, unsigned int order)
 {
-	debugfs_create_u64("prezero_really_skip", 0644, NULL, &prezero_really_skip);
-	debugfs_create_u64("prezero_counter", 0644, NULL, &prezero_counter);
-	debugfs_create_u64("prezero_check_zero_highpage", 0644, NULL, &prezero_check_zero_highpage);
-	debugfs_create_u64("prezero_could_have_skipped", 0644, NULL, &prezero_could_have_skipped);
-	debugfs_create_u64("prezero_buddy_sane_checks", 0644, NULL, &prezero_buddy_sane_checks);
-	debugfs_create_u64("prezero_buddy_order", 0644, NULL, &prezero_buddy_order);
-
-	return 0;
-}
-late_initcall(prezero_debugfs);
-
-void check_zero_highpage(struct page *page, int order, int numpages, int line, struct page *op)
-{
-       int nr;
-
-	if (!prezero_check_zero_highpage)
-		return;
-
-       //trace_printk("check_zero_highpage() checked pfn=0x%lx order=%d numpages: %d from line %d\n", page_to_pfn(page), order, numpages, line);
-       // big old hack, doesn't work for highmem:
-       if (!memchr_inv(page_address(page), 0, PAGE_SIZE<<order))
-               return;
-       BUILD_BUG_ON(IS_ENABLED(CONFIG_HIGHMEM));
-
-       printk("check_zero_highpage() BAD pfn=0x%lx/%d numpages: %d from line %d\n", page_to_pfn(page), order, numpages, line);
-       trace_printk("check_zero_highpage() BAD pfn=0x%lx order=%d numpages: %d from line %d\n", page_to_pfn(page), order, numpages, line);
-       trace_printk("check_zero_highpage() real pfn=0x%lx\n", page_to_pfn(op));
-       tracing_off();
-       WARN_ON(1);
-       for (nr = 0; nr < 1<<order; nr++) {
-               struct page *tmp = &page[nr];
-               if (PageBuddy(tmp))
-                       printk("page[0x%x] had PageBuddy pfn=0x%lx\n", nr, page_to_pfn(tmp));
-               clear_highpage(&page[nr]);
-       }
-}
-
-/*
- * Only use this for pages which are new to the buddy allocator.
- * They should not yet have PageBuddy() set.
- */
-static inline void mark_new_buddy(struct page *page, unsigned int order,
-				  enum zero_state zero)
-{
-	unsigned long private = order;
-
-	WARN_ON(PageBuddy(page));
-
-	if (zero == PRE_ZEROED) {
-		private |= BUDDY_ZEROED;
-		check_zero_highpage(page, order, 1<<order, __LINE__, page);
-	}
-
-	__SetPageBuddy(page);
-	set_buddy_private(page, private);
-}
-
-/*
-static inline void change_buddy_order(struct page *page, unsigned int order)
-{
-	WARN_ON(!PageBuddy(page));
-	__SetPageBuddy(page);
 	set_page_private(page, order);
+	__SetPageBuddy(page);
 }
-*/
 
 /*
  * This function checks whether a page is free && is the buddy
@@ -1106,125 +1017,9 @@ static inline void del_page_from_free_list(struct page *page, struct zone *zone,
 		__ClearPageReported(page);
 
 	list_del(&page->lru);
-	set_buddy_private(page, 0);
 	__ClearPageBuddy(page);
+	set_page_private(page, 0);
 	zone->free_area[order].nr_free--;
-}
-
-bool __zero_one_page(struct zone *zone, int order)
-{
-	struct page *page;
-	int numpages = 1<<order;
-	int i;
-	int migratetype = MIGRATE_RECLAIMABLE;
-	struct free_area *area;
-	bool did_zero = false;
-	int got_mt;
-	int order_orig;
-
-	spin_lock(&zone->lock);
-	/* mostly ripped from __rmqueue_smallest() */
-	area = &(zone->free_area[order]);
-
-	/* Look for a page to zero in all migratetypes: */
-	while (migratetype >= 0) {
-		struct list_head *lh = &area->free_list[migratetype];
-		page = get_page_from_free_area(area, migratetype);
-		got_mt = migratetype;
-		if (0) printk("page: %016llx mt: %d area: %016llx free: %ld le: %d lhp: %016llx lhn: %016llx\n", (u64)page, migratetype, (u64)area, area->nr_free,
-				list_empty(lh),
-				(u64)lh->prev,
-				(u64)lh->next
-				);
-
-		/* Was a page located that needs to be zeroed? */
-		if (page && (pre_zeroed(page) == NOT_ZEROED))
-			break;
-
-		/* No page was found to zero.  Try another migratetype. */
-		page = NULL;
-		migratetype--;
-	}
-	if (!page) {
-		spin_unlock(&zone->lock);
-		return did_zero;
-	}
-	//trace_printk("got %lx pz: %d\n", page_to_pfn(page), pre_zeroed(page));
-	order_orig = buddy_order(page);
-	//tpage(page, order);
-	del_page_from_free_list(page, zone, order);
-	spin_unlock(&zone->lock);
-
-	did_zero = true;
-	for (i = 0; i < numpages; i++) {
-		clear_highpage(page + i);
-	}
-
-	spin_lock(&zone->lock);
-	{
-		int pz_before = pre_zeroed(page);
-		int order_before = buddy_order(page);
-		int pz_after;
-		int order_after;
-
-		mark_new_buddy(page, order, PRE_ZEROED);
-		pz_after = pre_zeroed(page);
-		order_after = buddy_order(page);
-		if (0) trace_printk("done zeroing pfn=0x%lx pz: %d/%d order: %d/%d/%d/%d mt: %d/%d\n", page_to_pfn(page),
-				pz_before, pz_after, order, order_orig, order_before, order_after,
-				got_mt, migratetype);
-	}
-        /*
-         * If this page's buddy was freed while the lock was
-         * released, we might now have to buddies on the 'order'
-         * list that need to be merged.  This isn't great, but
-         * it's unlikely to matter if this is only used for
-         * >=2M pages.
-         *
-         * This could be fixed by doing merging here, or using
-         * higher-level allocator functions that do merging.
-         */
-	add_to_free_list_tail(page, zone, order, migratetype);
-	//did_some_prezeroing = 1;
-	check_zero_highpage(page , order, 1<<order, __LINE__, page);
-	spin_unlock(&zone->lock);
-	return did_zero;
-}
-
-
-int zero_pages(struct zone *zone, int order, int do_count)
-{
-	int count = 0;
-
-	while (__zero_one_page(zone, order)) {
-		cond_resched();
-		count++;
-		// arbitrary limit to keep this from
-		// taking insane amounts of time:
-		if (count >= do_count)
-			break;
-	}
-
-	trace_printk("zeroed %5d order %2d pages in %s\n",
-			count, order, zone->name);
-	//printk("zeroed %5d order %2d pages in %s\n",
-	//		count, order, zone->name);
-
-	return count;
-}
-
-void zero_some_pages(struct zone *zone, int pages)
-{
-	int order;
-	long zero_count = 0;
-
-	for (order = MAX_ORDER-1; order >= prezero_buddy_order; order--) {
-		long did = zero_pages(zone, order, pages);
-		zero_count += did << order;
-		if (zero_count > pages)
-			break;
-	}
-	printk("zeroed %6ld pages in %s\n", zero_count, zone->name);
 }
 
 /*
@@ -1353,7 +1148,7 @@ continue_merging:
 
 done_merging:
 	list_check_buddy_is_sane(page, order);
-	mark_new_buddy(page, order, NOT_ZEROED);
+	set_buddy_order(page, order);
 
 	if (fpi_flags & FPI_TO_TAIL)
 		to_tail = true;
@@ -1497,20 +1292,8 @@ static void kernel_init_free_pages(struct page *page, int numpages, bool zero_ta
 	kasan_disable_current();
 	for (i = 0; i < numpages; i++) {
 		u8 tag = page_kasan_tag(page + i);
-		bool need_to_zero = true;
-
 		page_kasan_tag_reset(page + i);
-		if (pre_zeroed(page) == PRE_ZEROED) {
-			check_zero_highpage(page, ilog2(numpages), numpages, __LINE__, page);
-			//trace_printk("would have skipped zero\n");
-			if (prezero_really_skip)
-				need_to_zero = false;
-			prezero_could_have_skipped++;
-		}
-		if (need_to_zero)
-			clear_highpage(page + i);
-		else
-			prezero_counter++;
+		clear_highpage(page + i);
 		page_kasan_tag_set(page + i, tag);
 	}
 	kasan_enable_current();
@@ -1553,11 +1336,6 @@ static __always_inline bool free_pages_prepare(struct page *page,
 			ClearPageHasHWPoisoned(page);
 		}
 		for (i = 1; i < (1 << order); i++) {
-			/*
-			 * This will leave BUDDY_ZEROED in place
-			 * in tail pages.  It should get cleared
-			 * up before anyone notices in expand().
-			 */
 			if (compound)
 				bad += free_tail_pages_check(page, page + i);
 			if (unlikely(check_free_page(page + i))) {
@@ -1622,58 +1400,44 @@ static __always_inline bool free_pages_prepare(struct page *page,
 	return true;
 }
 
+#ifdef CONFIG_DEBUG_VM
 /*
- * Is extra page-free-time debugging needed?  Returning true here will wreck
- * performance, but add extra sanity checks to pages at free time.  Only
- * turn on when debugging.
- */
-static inline bool extra_debug_free(void)
-{
-	return IS_ENABLED(CONFIG_DEBUG_VM) || debug_pagealloc_enabled_static();
-}
-
-/*
- * Called when pages are freed into the allocaor but before being added to the
- * pcp lists.  Only do free page checking when some form of debugging is on to
- * reduce overhead.
+ * With DEBUG_VM enabled, order-0 pages are checked immediately when being freed
+ * to pcp lists. With debug_pagealloc also enabled, they are also rechecked when
+ * moved from pcp lists to free lists.
  */
 static bool free_pcp_prepare(struct page *page, unsigned int order)
 {
-	//tpage(page, order);
-	page->private = 0;
-	//tpage(page, order);
-
-	return free_pages_prepare(page, order, extra_debug_free(), FPI_NONE);
+	return free_pages_prepare(page, order, true, FPI_NONE);
 }
 
-/*
- * Called when pages are moved from the pcp lists to the main buddy free lists.
- *
- * These pages should have been checked when they were initially freed into the
- * allocator via free_pcp_prepare().  Check them again if one the extra free
- * debugging checks are on.
- */
-static bool bulkfree_pcp_prepare(struct page *page, int order)
+static bool bulkfree_pcp_prepare(struct page *page)
 {
-	unsigned long private = page->private;
-	//tpage(page, order);
-
-	/*
-	 * Only BUDDY_ZEROED should be set in page->private at
-	 * this point.  If any other bit is set, we have uno
-	 * problemo.
-	 */
-	if ((private & ~BUDDY_ZEROED) && printk_ratelimit()) {
-		printk("%s()::%d %lx\n", __func__, __LINE__, page->private);
-		page->private = 0;
-		//tpage(page, order);
-	}
-
-	if (extra_debug_free())
+	if (debug_pagealloc_enabled_static())
 		return check_free_page(page);
 	else
 		return false;
 }
+#else
+/*
+ * With DEBUG_VM disabled, order-0 pages being freed are checked only when
+ * moving from pcp lists to free list in order to reduce overhead. With
+ * debug_pagealloc enabled, they are checked also immediately when being freed
+ * to the pcp lists.
+ */
+static bool free_pcp_prepare(struct page *page, unsigned int order)
+{
+	if (debug_pagealloc_enabled_static())
+		return free_pages_prepare(page, order, true, FPI_NONE);
+	else
+		return free_pages_prepare(page, order, false, FPI_NONE);
+}
+
+static bool bulkfree_pcp_prepare(struct page *page)
+{
+	return check_free_page(page);
+}
+#endif /* CONFIG_DEBUG_VM */
 
 static inline void prefetch_buddy(struct page *page)
 {
@@ -1736,7 +1500,7 @@ static void free_pcppages_bulk(struct zone *zone, int count,
 			nr_freed += 1 << order;
 			count -= 1 << order;
 
-			if (bulkfree_pcp_prepare(page, order))
+			if (bulkfree_pcp_prepare(page))
 				continue;
 
 			/* Encode order with the migratetype */
@@ -2537,7 +2301,7 @@ void __init init_cma_reserved_pageblock(struct page *page)
  * -- nyc
  */
 static inline void expand(struct zone *zone, struct page *page,
-	int low, int high, int migratetype, enum zero_state page_prezeroed)
+	int low, int high, int migratetype)
 {
 	unsigned long size = 1 << high;
 
@@ -2555,8 +2319,8 @@ static inline void expand(struct zone *zone, struct page *page,
 		if (set_page_guard(zone, &page[size], high, migratetype))
 			continue;
 
-		mark_new_buddy(&page[size], high, page_prezeroed);
 		add_to_free_list(&page[size], zone, high, migratetype);
+		set_buddy_order(&page[size], high);
 	}
 }
 
@@ -2635,19 +2399,10 @@ static bool check_new_pages(struct page *page, unsigned int order)
 	return false;
 }
 
-noinline void post_alloc_hook(struct page *page, unsigned int order,
+inline void post_alloc_hook(struct page *page, unsigned int order,
 				gfp_t gfp_flags)
 {
-	if ((page->private & ~BUDDY_ZEROED) && printk_ratelimit()) {
-		printk("%s()::%d BAD page private: priv=%lx\n", __func__, __LINE__, page->private);
-		page->private = 0;
-		/*
-		 * PageBuddy() is clear.  This trips the
-		 * PageBuddy check in set_buddy_private().
-		 */
-		//set_buddy_private(page, 0);
-		dump_stack();
-	}
+	set_page_private(page, 0);
 	set_page_refcounted(page);
 
 	arch_alloc_page(page, order);
@@ -2680,7 +2435,7 @@ noinline void post_alloc_hook(struct page *page, unsigned int order,
 	page_table_check_alloc(page, order);
 }
 
-static noinline void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
+static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
 							unsigned int alloc_flags)
 {
 	post_alloc_hook(page, order, gfp_flags);
@@ -2714,30 +2469,13 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 
 	/* Find a page of the appropriate size in the preferred list */
 	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
-		enum zero_state page_pz;
 		area = &(zone->free_area[current_order]);
 		page = get_page_from_free_area(area, migratetype);
 		if (!page)
 			continue;
-		/* stash this away before del_page_from_free_list() zaps it: */
-		page_pz = pre_zeroed(page);
-
 		del_page_from_free_list(page, zone, current_order);
-		expand(zone, page, order, current_order, migratetype, page_pz);
+		expand(zone, page, order, current_order, migratetype);
 		set_pcppage_migratetype(page, migratetype);
-		/*
-		 * This is a hack.  The state was zapped above
-		 * and is restored here.  We should probably
-		 * think about if del_page_from_free_list()
-		 * leaves BUDDY_ZEROED in place and what the
-		 * implications are.
-		 *
-		 * Without this, pages leaving the buddy always
-		 * have page->private=0.
-		 */
-		if (page_pz == PRE_ZEROED) {
-			page->private = BUDDY_ZEROED;
-		}
 		return page;
 	}
 
@@ -9751,9 +9489,7 @@ static void break_down_buddy_pages(struct zone *zone, struct page *page,
 
 		if (current_buddy != target) {
 			add_to_free_list(current_buddy, zone, high, migratetype);
-			// This is very rare.  Do not bother
-			// trying to preserve zero state:
-			mark_new_buddy(current_buddy, high, NOT_ZEROED);
+			set_buddy_order(current_buddy, high);
 			page = next_page;
 		}
 	}
@@ -9906,8 +9642,6 @@ void __list_check_buddy_high_orders(struct page *page, int order, int line)
 
 void __list_check_buddy_is_sane(struct page *page, int order, int line)
 {
-	if (!prezero_buddy_sane_checks)
-		return;
 	__list_check_buddy_high_orders(page, order, line);
 	__list_check_buddy_low_orders(page, order, line);
 }
