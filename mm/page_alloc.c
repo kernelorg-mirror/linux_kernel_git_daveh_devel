@@ -773,6 +773,8 @@ static enum zero_state pre_zeroed(struct page *page)
 static void set_buddy_private(struct page *page, unsigned long value)
 {
 	WARN_ON(!PageBuddy(page));
+	if (pre_zeroed(page) && !(value & BUDDY_ZEROED))
+		trace_printk("cleared BUDDY_ZEROED: pfn=%lx %lx->%lx\n", page_to_pfn(page), page->private, value);
 	set_page_private(page, value);
 }
 
@@ -1356,8 +1358,10 @@ static void kernel_init_free_pages(struct page *page, int numpages, bool zero_ta
 	for (i = 0; i < numpages; i++) {
 		u8 tag = page_kasan_tag(page + i);
 		page_kasan_tag_reset(page + i);
-		if (pre_zeroed(page) == PRE_ZEROED)
+		if (pre_zeroed(page) == PRE_ZEROED) {
 			check_zero_highpage(page, ilog2(numpages), numpages, __LINE__, page);
+			trace_printk("would have skipped zero\n");
+		}
 		clear_highpage(page + i);
 		page_kasan_tag_set(page + i, tag);
 	}
@@ -2371,10 +2375,9 @@ void __init init_cma_reserved_pageblock(struct page *page)
  * -- nyc
  */
 static inline void expand(struct zone *zone, struct page *page,
-	int low, int high, int migratetype)
+	int low, int high, int migratetype, enum zero_state page_prezeroed)
 {
 	unsigned long size = 1 << high;
-	enum zero_state page_prezeroed = pre_zeroed(page);
 
 	while (high > low) {
 		high--;
@@ -2390,8 +2393,8 @@ static inline void expand(struct zone *zone, struct page *page,
 		if (set_page_guard(zone, &page[size], high, migratetype))
 			continue;
 
-		add_to_free_list(&page[size], zone, high, migratetype);
 		mark_new_buddy(&page[size], high, page_prezeroed);
+		add_to_free_list(&page[size], zone, high, migratetype);
 	}
 }
 
@@ -2549,13 +2552,30 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 
 	/* Find a page of the appropriate size in the preferred list */
 	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
+		enum zero_state page_pz;
 		area = &(zone->free_area[current_order]);
 		page = get_page_from_free_area(area, migratetype);
 		if (!page)
 			continue;
+		/* stash this away before del_page_from_free_list() zaps it: */
+		page_pz = pre_zeroed(page);
+
 		del_page_from_free_list(page, zone, current_order);
-		expand(zone, page, order, current_order, migratetype);
+		expand(zone, page, order, current_order, migratetype, page_pz);
 		set_pcppage_migratetype(page, migratetype);
+		/*
+		 * This is a hack.  The state was zapped above
+		 * and is restored here.  We should probably
+		 * think about if del_page_from_free_list()
+		 * leaves BUDDY_ZEROED in place and what the
+		 * implications are.
+		 *
+		 * Without this, pages leaving the buddy always
+		 * have page->private=0.
+		 */
+		if (page_pz == PRE_ZEROED) {
+			page->private = BUDDY_ZEROED;
+		}
 		return page;
 	}
 
