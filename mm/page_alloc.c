@@ -1474,44 +1474,40 @@ static __always_inline bool free_pages_prepare(struct page *page,
 	return true;
 }
 
-#ifdef CONFIG_DEBUG_VM
 /*
- * With DEBUG_VM enabled, order-0 pages are checked immediately when being freed
- * to pcp lists. With debug_pagealloc also enabled, they are also rechecked when
- * moved from pcp lists to free lists.
+ * Is extra page-free-time debugging needed?  Returning true here will wreck
+ * performance, but add extra sanity checks to pages at free time.  Only
+ * turn on when debugging.
+ */
+static inline bool extra_debug_free(void)
+{
+	return IS_ENABLED(CONFIG_DEBUG_VM) || debug_pagealloc_enabled_static();
+}
+
+/*
+ * Called when pages are freed into the allocaor but before being added to the
+ * pcp lists.  Only do free page checking when some form of debugging is on to
+ * reduce overhead.
  */
 static bool free_pcp_prepare(struct page *page, unsigned int order)
 {
-	return free_pages_prepare(page, order, true, FPI_NONE);
+	return free_pages_prepare(page, order, extra_debug_free(), FPI_NONE);
 }
 
+/*
+ * Called when pages are moved from the pcp lists to the main buddy free lists.
+ *
+ * These pages should have been checked when they were initially freed into the
+ * allocator via free_pcp_prepare().  Check them again if one the extra free
+ * debugging checks are on.
+ */
 static bool bulkfree_pcp_prepare(struct page *page)
 {
-	if (debug_pagealloc_enabled_static())
+	if (extra_debug_free())
 		return check_free_page(page);
 	else
 		return false;
 }
-#else
-/*
- * With DEBUG_VM disabled, order-0 pages being freed are checked only when
- * moving from pcp lists to free list in order to reduce overhead. With
- * debug_pagealloc enabled, they are checked also immediately when being freed
- * to the pcp lists.
- */
-static bool free_pcp_prepare(struct page *page, unsigned int order)
-{
-	if (debug_pagealloc_enabled_static())
-		return free_pages_prepare(page, order, true, FPI_NONE);
-	else
-		return free_pages_prepare(page, order, false, FPI_NONE);
-}
-
-static bool bulkfree_pcp_prepare(struct page *page)
-{
-	return check_free_page(page);
-}
-#endif /* CONFIG_DEBUG_VM */
 
 static inline void prefetch_buddy(struct page *page)
 {
