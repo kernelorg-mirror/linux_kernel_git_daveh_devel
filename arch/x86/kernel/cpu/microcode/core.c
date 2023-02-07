@@ -411,6 +411,7 @@ enum ucode_state apply_microcode(int cpu)
 static int __reload_late(void *info)
 {
 	int cpu = smp_processor_id();
+	struct ucode_cpu_info *uci;
 	enum ucode_state err;
 	bool lead_thread;
 	int ret = 0;
@@ -449,13 +450,12 @@ wait_for_siblings:
 		panic("Timeout during microcode update!\n");
 
 	/*
-	 * At least one thread has completed update on each core.
-	 * For others, simply call the update to make sure the
-	 * per-cpu cpuinfo can be updated with right microcode
-	 * revision.
+	 * For non-lead threads where microcode was not applied, unconditionally
+	 * update the per-cpu metadata.  This can tolerate the lead thread
+	 * either succeeding or failing the update.
 	 */
 	if (!lead_thread)
-		err = apply_microcode(cpu);
+		update_microcode_version_cache(cpu);
 
 	return ret;
 }
