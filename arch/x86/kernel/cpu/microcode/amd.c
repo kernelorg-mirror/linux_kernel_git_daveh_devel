@@ -713,10 +713,8 @@ static enum ucode_state apply_microcode_amd(int cpu)
 	rev = get_microcode_revision_amd();
 
 	/* need to apply patch? */
-	if (rev >= mc_amd->hdr.patch_id) {
-		ret = UCODE_OK;
-		goto out;
-	}
+	if (rev >= mc_amd->hdr.patch_id)
+		return UCODE_OK;
 
 	if (__apply_microcode_amd(mc_amd)) {
 		pr_err("CPU%d: update failed for patch_level=0x%08x\n",
@@ -724,14 +722,9 @@ static enum ucode_state apply_microcode_amd(int cpu)
 		return UCODE_ERROR;
 	}
 
-	rev = mc_amd->hdr.patch_id;
-	ret = UCODE_UPDATED;
+	pr_info("CPU%d: new patch_level=0x%08x\n", cpu, mc_amd->hdr.patch_id);
 
-	pr_info("CPU%d: new patch_level=0x%08x\n", cpu, rev);
-
-	uci->cpu_sig.rev = rev;
-
-	return ret;
+	return UCODE_UPDATED;
 }
 
 static size_t install_equiv_cpu_table(const u8 *buf, size_t buf_size)
