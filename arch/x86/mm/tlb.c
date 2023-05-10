@@ -1044,9 +1044,19 @@ static void do_kernel_range_flush(void *info)
 
 void flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
-	/* Balance as user space task's flush, a bit conservative */
-	if (end == TLB_FLUSH_ALL ||
-	    (end - start) > tlb_single_page_flush_ceiling << PAGE_SHIFT) {
+	bool do_all = false;
+
+	/*
+	 * Check first for the conditions that force a full
+	 * flush instead of doing a true ranged flush.
+	 */
+	do_all |= (end == TLB_FLUSH_ALL);
+	/* Revert to flushing all if INVPCID is broken: */
+	do_all |= boot_cpu_has_bug(X86_BUG_INVLPG_MISS_GLOBAL);
+	/* Balance like user space task's flush, a bit conservative: */
+	do_all |= (end - start) > tlb_single_page_flush_ceiling << PAGE_SHIFT;
+
+	if (do_all) {
 		on_each_cpu(do_flush_tlb_all, NULL, 1);
 	} else {
 		struct flush_tlb_info *info;
@@ -1088,6 +1098,15 @@ EXPORT_SYMBOL_GPL(__get_current_cr3_fast);
 void flush_tlb_one_kernel(unsigned long addr)
 {
 	count_vm_tlb_event(NR_TLB_LOCAL_FLUSH_ONE);
+
+	/*
+	 * INVLPG may miss flushing global entries on some
+	 * CPUs.  Do a full TLB flush instead.
+	 */
+	if (boot_cpu_has_bug(X86_BUG_INVLPG_MISS_GLOBAL)) {
+		__flush_tlb_all();
+		return;
+	}
 
 	/*
 	 * If PTI is off, then __flush_tlb_one_user() is just INVLPG or its

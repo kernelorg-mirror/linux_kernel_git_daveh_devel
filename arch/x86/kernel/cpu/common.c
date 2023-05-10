@@ -1563,6 +1563,25 @@ static void __init cpu_parse_early_param(void)
 		add_taint(TAINT_CPU_OUT_OF_SPEC, LOCKDEP_STILL_OK);
 }
 
+static const struct x86_cpu_id invpcid_miss_ids[] = {
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_ALDERLAKE,	X86_FEATURE_ANY },
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_ALDERLAKE_L,	X86_FEATURE_ANY },
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_ALDERLAKE_N,	X86_FEATURE_ANY },
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_RAPTORLAKE,	X86_FEATURE_ANY },
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_RAPTORLAKE_P,	X86_FEATURE_ANY },
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_RAPTORLAKE_S,	X86_FEATURE_ANY },
+};
+
+static void __init cpu_set_invlpg_bug_bit(struct cpuinfo_x86 *c)
+{
+	const struct x86_cpu_id *id = x86_match_cpu(invpcid_miss_ids);
+
+	if (!id)
+		return;
+
+	setup_force_cpu_bug(X86_BUG_INVLPG_MISS_GLOBAL);
+}
+
 /*
  * Do minimum CPU detection early.
  * Fields really needed: vendor, cpuid_level, family, model, mask,
@@ -1615,6 +1634,7 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 	setup_force_cpu_cap(X86_FEATURE_ALWAYS);
 
 	cpu_set_bug_bits(c);
+	cpu_set_invlpg_bug_bit(c);
 
 	sld_setup(c);
 
