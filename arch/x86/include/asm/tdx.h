@@ -83,6 +83,9 @@ static inline long tdx_kvm_hypercall(unsigned int nr, unsigned long p1,
 u64 __seamcall(u64 fn, struct tdx_module_args *args);
 u64 __seamcall_ret(u64 fn, struct tdx_module_args *args);
 u64 __seamcall_saved_ret(u64 fn, struct tdx_module_args *args);
+void init_tdx(void);
+#else
+static inline void init_tdx(void) { }
 #endif	/* CONFIG_INTEL_TDX_HOST */
 
 #endif /* !__ASSEMBLY__ */

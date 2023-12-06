@@ -29,6 +29,7 @@
 #include <asm/resctrl.h>
 #include <asm/numa.h>
 #include <asm/thermal.h>
+#include <asm/tdx.h>
 
 #ifdef CONFIG_X86_64
 #include <linux/topology.h>
@@ -711,6 +712,8 @@ static void init_intel(struct cpuinfo_x86 *c)
 	bus_lock_init();
 
 	intel_init_thermal(c);
+
+	init_tdx();
 }
 
 #ifdef CONFIG_X86_32
