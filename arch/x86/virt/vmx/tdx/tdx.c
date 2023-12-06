@@ -15,7 +15,25 @@
 #include <asm/msr-index.h>
 #include <asm/msr.h>
 #include <asm/cpufeature.h>
+#include <asm/cpufeature.h>
+#include <asm/intel-family.h>
+#include <asm/processor.h>
 #include <asm/tdx.h>
+
+static void check_tdx_erratum(void)
+{
+	/*
+	 * These CPUs have an erratum.  A partial write from non-TD
+	 * software (e.g. via MOVNTI variants or UC/WC mapping) to TDX
+	 * private memory poisons that memory, and a subsequent read of
+	 * that memory triggers #MC.
+	 */
+	switch (boot_cpu_data.x86_model) {
+	case INTEL_FAM6_SAPPHIRERAPIDS_X:
+	case INTEL_FAM6_EMERALDRAPIDS_X:
+		setup_force_cpu_bug(X86_BUG_TDX_PW_MCE);
+	}
+}
 
 static u32 tdx_global_keyid __ro_after_init;
 static u32 tdx_guest_keyid_start __ro_after_init;
@@ -78,4 +96,6 @@ void init_tdx(void)
 	tdx_nr_guest_keyids = nr_tdx_keyids - 1;
 
 	setup_force_cpu_cap(X86_FEATURE_TDX_HOST_PLATFORM);
+
+	check_tdx_erratum();
 }
