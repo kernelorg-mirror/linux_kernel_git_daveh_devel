@@ -357,69 +357,13 @@ static void pgd_prepopulate_user_pmd(struct mm_struct *mm,
 {
 }
 #endif
-/*
- * Xen paravirt assumes pgd table should be in one page. 64 bit kernel also
- * assumes that pgd should be in one page.
- *
- * But kernel with PAE paging that is not running as a Xen domain
- * only needs to allocate 32 bytes for pgd instead of one page.
- */
-#ifdef CONFIG_X86_PAE
-
-#include <linux/slab.h>
-
-#define PGD_SIZE	(PTRS_PER_PGD * sizeof(pgd_t))
-#define PGD_ALIGN	32
-
-static struct kmem_cache *pgd_cache;
-
-void __init pgtable_cache_init(void)
-{
-	/*
-	 * When PAE kernel is running as a Xen domain, it does not use
-	 * shared kernel pmd. And this requires a whole page for pgd.
-	 */
-	if (!SHARED_KERNEL_PMD)
-		return;
-
-	/*
-	 * when PAE kernel is not running as a Xen domain, it uses
-	 * shared kernel pmd. Shared kernel pmd does not require a whole
-	 * page for pgd. We are able to just allocate a 32-byte for pgd.
-	 * During boot time, we create a 32-byte slab for pgd table allocation.
-	 */
-	pgd_cache = kmem_cache_create("pgd_cache", PGD_SIZE, PGD_ALIGN,
-				      SLAB_PANIC, NULL);
-}
 
 static inline pgd_t *_pgd_alloc(void)
 {
 	/*
-	 * If no SHARED_KERNEL_PMD, PAE kernel is running as a Xen domain.
-	 * We allocate one page for pgd.
+	 * For simplicity, just allocate a page for all
+	 * PGDs even though the PAE PGD is only 32 bytes:
 	 */
-	if (!SHARED_KERNEL_PMD)
-		return (pgd_t *)__get_free_pages(GFP_PGTABLE_USER,
-						 PGD_ALLOCATION_ORDER);
-
-	/*
-	 * Now PAE kernel is not running as a Xen domain. We can allocate
-	 * a 32-byte slab for pgd to save memory space.
-	 */
-	return kmem_cache_alloc(pgd_cache, GFP_PGTABLE_USER);
-}
-
-static inline void _pgd_free(pgd_t *pgd)
-{
-	if (!SHARED_KERNEL_PMD)
-		free_pages((unsigned long)pgd, PGD_ALLOCATION_ORDER);
-	else
-		kmem_cache_free(pgd_cache, pgd);
-}
-#else
-
-static inline pgd_t *_pgd_alloc(void)
-{
 	return (pgd_t *)__get_free_pages(GFP_PGTABLE_USER,
 					 PGD_ALLOCATION_ORDER);
 }
@@ -428,7 +372,6 @@ static inline void _pgd_free(pgd_t *pgd)
 {
 	free_pages((unsigned long)pgd, PGD_ALLOCATION_ORDER);
 }
-#endif /* CONFIG_X86_PAE */
 
 pgd_t *pgd_alloc(struct mm_struct *mm)
 {
