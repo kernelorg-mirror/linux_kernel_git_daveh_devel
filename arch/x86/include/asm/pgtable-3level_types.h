@@ -27,8 +27,6 @@ typedef union {
 } pmd_t;
 #endif	/* !__ASSEMBLY__ */
 
-#define SHARED_KERNEL_PMD	(!static_cpu_has(X86_FEATURE_PTI))
-
 #define ARCH_PAGE_TABLE_SYNC_MASK	PGTBL_PMD_MODIFIED
 
 /*
