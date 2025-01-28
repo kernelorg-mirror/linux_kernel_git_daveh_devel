@@ -152,16 +152,9 @@ ssize_t netfs_perform_write(struct kiocb *iocb, struct iov_iter *iter,
 		offset = pos & (max_chunk - 1);
 		part = min(max_chunk - offset, iov_iter_count(iter));
 
-		/* Bring in the user pages that we will copy from _first_ lest
-		 * we hit a nasty deadlock on copying from the same page as
-		 * we're writing to, without it being marked uptodate.
-		 *
-		 * Not only is this an optimisation, but it is also required to
-		 * check that the address is actually valid, when atomic
-		 * usercopies are used below.
-		 *
-		 * We rely on the page being held onto long enough by the LRU
-		 * that we can grab it below if this causes it to be read.
+		/* Bring in the user folios that are copied from before taking
+		 * locks on the mapping folios. This helps ensure forward
+		 * progress if they are the same folios.
 		 */
 		ret = -EFAULT;
 		if (unlikely(fault_in_iov_iter_readable(iter, part) == part))
