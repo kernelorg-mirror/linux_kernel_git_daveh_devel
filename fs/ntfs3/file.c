@@ -1092,11 +1092,6 @@ static ssize_t ntfs_compress_write(struct kiocb *iocb, struct iov_iter *from)
 		frame_vbo = pos & ~(frame_size - 1);
 		index = frame_vbo >> PAGE_SHIFT;
 
-		if (unlikely(fault_in_iov_iter_readable(from, bytes))) {
-			err = -EFAULT;
-			goto out;
-		}
-
 		/* Load full frame. */
 		err = ntfs_get_frame_pages(mapping, index, pages,
 					   pages_per_frame, &frame_uptodate);
@@ -1171,6 +1166,18 @@ static ssize_t ntfs_compress_write(struct kiocb *iocb, struct iov_iter *from)
 		 * is disabled.
 		 */
 		cond_resched();
+
+		if (unlikely(!copied)) {
+			/*
+			 * folios are now unlocked and faults on them can be
+			 * handled. Ensure forward progress by trying to
+			 * fault in 'from' in case it maps one of the folios.
+			 */
+			if (fault_in_iov_iter_readable(from, bytes)) {
+				err = -EFAULT;
+				goto out;
+			}
+		}
 
 		pos += copied;
 		written += copied;
