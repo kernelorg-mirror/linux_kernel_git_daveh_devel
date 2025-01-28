@@ -1164,15 +1164,6 @@ ssize_t btrfs_buffered_write(struct kiocb *iocb, struct iov_iter *i)
 		int extents_locked;
 		bool force_page_uptodate = false;
 
-		/*
-		 * Fault pages before locking them in prepare_one_folio()
-		 * to avoid recursive lock
-		 */
-		if (unlikely(fault_in_iov_iter_readable(i, write_bytes))) {
-			ret = -EFAULT;
-			break;
-		}
-
 		only_release_metadata = false;
 		sector_offset = pos & (fs_info->sectorsize - 1);
 
@@ -1313,6 +1304,17 @@ again:
 		btrfs_drop_folio(fs_info, folio, pos, copied);
 
 		cond_resched();
+
+		/*
+		 * Fault pages in a slow path after dropping folio
+		 * lock. This avoids the chance of deadlocking in
+		 * the fault handler.
+		 */
+		if (unlikely(copied == 0) &&
+		    (fault_in_iov_iter_readable(i, write_bytes) == write_bytes)) {
+			ret = -EFAULT;
+			break;
+		}
 
 		pos += copied;
 		num_written += copied;
