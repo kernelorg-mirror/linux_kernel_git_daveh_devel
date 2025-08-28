@@ -28,6 +28,8 @@ static inline pte_t *__pte_alloc_one_kernel_noprof(struct mm_struct *mm)
 		return NULL;
 	}
 
+	ptdesc_set_kernel(ptdesc);
+
 	return ptdesc_address(ptdesc);
 }
 #define __pte_alloc_one_kernel(...)	alloc_hooks(__pte_alloc_one_kernel_noprof(__VA_ARGS__))
@@ -137,8 +139,10 @@ static inline pmd_t *pmd_alloc_one_noprof(struct mm_struct *mm, unsigned long ad
 	struct ptdesc *ptdesc;
 	gfp_t gfp = GFP_PGTABLE_USER;
 
-	if (mm == &init_mm)
+	if (mm == &init_mm) {
 		gfp = GFP_PGTABLE_KERNEL;
+		ptdesc_set_kernel(ptdesc);
+	}
 	ptdesc = pagetable_alloc_noprof(gfp, 0);
 	if (!ptdesc)
 		return NULL;
@@ -170,8 +174,10 @@ static inline pud_t *__pud_alloc_one_noprof(struct mm_struct *mm, unsigned long 
 	gfp_t gfp = GFP_PGTABLE_USER;
 	struct ptdesc *ptdesc;
 
-	if (mm == &init_mm)
+	if (mm == &init_mm) {
 		gfp = GFP_PGTABLE_KERNEL;
+		ptdesc_set_kernel(ptdesc);
+	}
 	gfp &= ~__GFP_HIGHMEM;
 
 	ptdesc = pagetable_alloc_noprof(gfp, 0);
@@ -224,8 +230,10 @@ static inline p4d_t *__p4d_alloc_one_noprof(struct mm_struct *mm, unsigned long 
 	gfp_t gfp = GFP_PGTABLE_USER;
 	struct ptdesc *ptdesc;
 
-	if (mm == &init_mm)
+	if (mm == &init_mm) {
 		gfp = GFP_PGTABLE_KERNEL;
+		ptdesc_set_kernel(ptdesc);
+	}
 	gfp &= ~__GFP_HIGHMEM;
 
 	ptdesc = pagetable_alloc_noprof(gfp, 0);
@@ -268,8 +276,10 @@ static inline pgd_t *__pgd_alloc_noprof(struct mm_struct *mm, unsigned int order
 	gfp_t gfp = GFP_PGTABLE_USER;
 	struct ptdesc *ptdesc;
 
-	if (mm == &init_mm)
+	if (mm == &init_mm) {
 		gfp = GFP_PGTABLE_KERNEL;
+		ptdesc_set_kernel(ptdesc);
+	}
 	gfp &= ~__GFP_HIGHMEM;
 
 	ptdesc = pagetable_alloc_noprof(gfp, order);
