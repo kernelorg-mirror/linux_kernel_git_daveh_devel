@@ -55,6 +55,69 @@
  */
 #define TDX_VERSION_SHIFT		16
 
+/*
+ * Global Scope Metadata field IDs.
+ *
+ * See "Global Scope Metadata" in the Intel TDX Module ABI spec.
+ *
+ * A field ID is a 64-bit value that encodes the metadata "Class"
+ * (which Linux mirrors in 'struct tdx_sys_info' sub-structures),
+ * the element size, and a per-class field index.  Each ID below
+ * is paired with the C member that holds its value in the table
+ * driving read_sys_metadata_table() in tdx.c.
+ */
+
+/* Class "TDX Module Version" */
+#define MD_FIELD_ID_MINOR_VERSION		0x0800000100000003ULL
+#define MD_FIELD_ID_MAJOR_VERSION		0x0800000100000004ULL
+#define MD_FIELD_ID_UPDATE_VERSION		0x0800000100000005ULL
+
+/* Class "TDX Features" */
+#define MD_FIELD_ID_TDX_FEATURES0		0x0A00000300000008ULL
+
+/* Class "TDMR Info" */
+#define MD_FIELD_ID_MAX_TDMRS			0x9100000100000008ULL
+#define MD_FIELD_ID_MAX_RESERVED_PER_TDMR	0x9100000100000009ULL
+#define MD_FIELD_ID_PAMT_4K_ENTRY_SIZE		0x9100000100000010ULL
+#define MD_FIELD_ID_PAMT_2M_ENTRY_SIZE		0x9100000100000011ULL
+#define MD_FIELD_ID_PAMT_1G_ENTRY_SIZE		0x9100000100000012ULL
+
+/* Class "TD Control Structures" */
+#define MD_FIELD_ID_TDR_BASE_SIZE		0x9800000100000000ULL
+#define MD_FIELD_ID_TDCS_BASE_SIZE		0x9800000100000100ULL
+#define MD_FIELD_ID_TDVPS_BASE_SIZE		0x9800000100000200ULL
+
+/* Class "TD Configuration" */
+#define MD_FIELD_ID_ATTRIBUTES_FIXED0		0x1900000300000000ULL
+#define MD_FIELD_ID_ATTRIBUTES_FIXED1		0x1900000300000001ULL
+#define MD_FIELD_ID_XFAM_FIXED0			0x1900000300000002ULL
+#define MD_FIELD_ID_XFAM_FIXED1			0x1900000300000003ULL
+#define MD_FIELD_ID_NUM_CPUID_CONFIG		0x9900000100000004ULL
+#define MD_FIELD_ID_MAX_VCPUS_PER_TD		0x9900000100000008ULL
+/*
+ * Base IDs for the configurable-CPUID arrays.  The field ID of leaf
+ * index @i is BASE + i; for the values array, sub-entry @j of index
+ * @i is BASE + i*2 + j.
+ */
+#define MD_FIELD_ID_CPUID_CONFIG_LEAVES		0x9900000300000400ULL
+#define MD_FIELD_ID_CPUID_CONFIG_VALUES		0x9900000300000500ULL
+
+/*
+ * Sub-field definitions of MD_FIELD_ID.
+ *
+ * See "MD_FIELD_ID (Metadata Field Identifier / Sequence Header)
+ * Definition" in the Intel TDX Module ABI spec.
+ *
+ *  - Bit 33:32: ELEMENT_SIZE_CODE -- size of a single metadata element
+ */
+#define MD_FIELD_ID_ELE_SIZE_CODE(field_id)	\
+	(((field_id) & GENMASK_ULL(33, 32)) >> 32)
+
+#define MD_FIELD_ID_ELE_SIZE_8BIT	0
+#define MD_FIELD_ID_ELE_SIZE_16BIT	1
+#define MD_FIELD_ID_ELE_SIZE_32BIT	2
+#define MD_FIELD_ID_ELE_SIZE_64BIT	3
+
 /* TDX page types */
 #define	PT_NDA		0x0
 #define	PT_RSVD		0x1
