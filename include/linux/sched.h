@@ -1985,12 +1985,16 @@ extern void ia64_set_curr_task(int cpu, struct task_struct *p);
 
 void yield(void);
 
+struct thread_stacks {
+	unsigned long stack[THREAD_SIZE/sizeof(long)];
+};
+
 union thread_union {
 	struct task_struct task;
 #ifndef CONFIG_THREAD_INFO_IN_TASK
 	struct thread_info thread_info;
 #endif
-	unsigned long stack[THREAD_SIZE/sizeof(long)];
+	struct thread_stacks stacks;
 };
 
 #ifndef CONFIG_THREAD_INFO_IN_TASK
