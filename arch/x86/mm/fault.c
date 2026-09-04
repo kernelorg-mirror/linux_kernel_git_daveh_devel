@@ -955,11 +955,23 @@ do_sigbus(struct pt_regs *regs, unsigned long error_code, unsigned long address,
 
 static int spurious_kernel_fault_check(unsigned long error_code, pte_t *pte)
 {
+	/*
+	 * Shadow stack permission changes are never done lazily and
+	 * will never produce spurious faults. Ensure (normal) writes
+	 * to shadow stack pages are not treated as spurious below.
+	 */
+	if ((error_code & X86_PF_SHSTK) || pte_shstk(*pte)) {
+		printk("%s() SHSTK error_code: %016lx pte: %016llx\n", __func__, error_code, *(u64 *)pte);
+		return 0;
+	}
+
 	if ((error_code & X86_PF_WRITE) && !pte_write(*pte))
 		return 0;
 
 	if ((error_code & X86_PF_INSTR) && !pte_exec(*pte))
 		return 0;
+
+	printk("%s() error_code: %016lx pte: %016llx\n", __func__, error_code, *(u64 *)pte);
 
 	return 1;
 }
