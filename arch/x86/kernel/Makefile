@@ -169,6 +169,7 @@ obj-$(CONFIG_CALL_THUNKS)		+= callthunks.o
 obj-$(CONFIG_X86_CET)			+= cet.o
 
 obj-$(CONFIG_X86_USER_SHADOW_STACK)	+= shstk.o
+obj-$(CONFIG_X86_KERNEL_SHSTK_KUNIT_TEST) += shstk_kunit.o
 
 ###
 # 64 bit specific files
