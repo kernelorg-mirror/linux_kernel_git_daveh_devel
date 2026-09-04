@@ -1985,8 +1985,12 @@ extern void ia64_set_curr_task(int cpu, struct task_struct *p);
 
 void yield(void);
 
+#ifndef TASK_SHADOW_STACK_SIZE
+#define TASK_SHADOW_STACK_SIZE	0
+#endif
 struct thread_stacks {
 	unsigned long stack[THREAD_SIZE/sizeof(long)];
+	u8 shadow_stack[TASK_SHADOW_STACK_SIZE];
 };
 
 union thread_union {
