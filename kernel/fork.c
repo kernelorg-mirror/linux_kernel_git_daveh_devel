@@ -332,7 +332,7 @@ err:
 
 static void *__vmalloc_thread_stack_node(int node)
 {
-	return __vmalloc_node(THREAD_SIZE, THREAD_ALIGN,
+	return __vmalloc_node(sizeof(union thread_union), THREAD_ALIGN,
 			      GFP_VMAP_STACK,
 			      node, __builtin_return_address(0));
 }
