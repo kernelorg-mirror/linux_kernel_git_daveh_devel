@@ -345,6 +345,28 @@ static void *__vmalloc_thread_stack_node(int node)
 	return tu;
 }
 
+static inline void clear_stack_area(struct vm_struct *vm_area)
+{
+	union thread_union *tu = vm_area->addr;
+
+	int nr_stack_pages = sizeof(tu->stacks.stack)        / PAGE_SIZE;
+	int nr_shstk_pages = sizeof(tu->stacks.shadow_stack) / PAGE_SIZE;
+
+	/* Clear stale pointers from reused stack. */
+	clear_pages(&tu->stacks.stack, nr_stack_pages);
+
+	if (!nr_shstk_pages)
+		return;
+	/*
+	 * Clear the shadow stack page too, but via its direct map
+	 * alias. Note that the shadow stack is right after the
+	 * regular stack, so the nr_stack_pages'th page is the
+	 * first shadow stack page.
+	 */
+	BUILD_BUG_ON(nr_shstk_pages && nr_shstk_pages > 1);
+	clear_highpage(vm_area->pages[nr_stack_pages]);
+}
+
 static int alloc_thread_stack_node(struct task_struct *tsk, int node)
 {
 	struct vm_struct *vm_area;
@@ -363,8 +385,7 @@ static int alloc_thread_stack_node(struct task_struct *tsk, int node)
 
 		stack = kasan_reset_tag(vm_area->addr);
 
-		/* Clear stale pointers from reused stack. */
-		clear_pages(vm_area->addr, vm_area->nr_pages);
+		clear_stack_area(vm_area);
 
 		tsk->stack_vm_area = vm_area;
 		tsk->stack = stack;
