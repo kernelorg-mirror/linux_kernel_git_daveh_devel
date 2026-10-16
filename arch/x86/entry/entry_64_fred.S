@@ -16,6 +16,26 @@
 	.code64
 	.section .noinstr.text, "ax"
 
+/*
+ * Kernel-mode events: save the SSP of the shadow stack frame FRED
+ * pushed (old SSP, LIP, CS) just below pt_regs. See struct
+ * fred_kernel_frame.
+ */
+.macro PUSH_KERNEL_EVENT_SSP
+#ifdef CONFIG_X86_USER_SHADOW_STACK
+	xorl	%eax, %eax
+	rdsspq	%rax		/* nop if shadow stacks are off  */
+	pushq	%rax
+	UNWIND_HINT_REGS offset=8
+#endif
+.endm
+
+.macro POP_KERNEL_EVENT_SSP
+#ifdef CONFIG_X86_USER_SHADOW_STACK
+	addq	$8, %rsp
+#endif
+.endm
+
 .macro FRED_ENTER
 	UNWIND_HINT_END_OF_STACK
 	ANNOTATE_NOENDBR
@@ -54,7 +74,9 @@ SYM_CODE_END(asm_fred_entrypoint_user)
 	.org asm_fred_entrypoint_user + 256, 0xcc
 SYM_CODE_START_NOALIGN(asm_fred_entrypoint_kernel)
 	FRED_ENTER
+	PUSH_KERNEL_EVENT_SSP
 	call	fred_entry_from_kernel
+	POP_KERNEL_EVENT_SSP
 	FRED_EXIT
 	ERETS
 SYM_CODE_END(asm_fred_entrypoint_kernel)
