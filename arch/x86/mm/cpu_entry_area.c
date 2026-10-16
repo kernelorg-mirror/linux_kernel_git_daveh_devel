@@ -93,11 +93,14 @@ void cea_set_pte(void *cea_vaddr, phys_addr_t pa, pgprot_t flags)
 		pte = pte_set_flags(pte, _PAGE_GLOBAL);
 
 	set_pte_vaddr(va, pte);
+
+	printk("%s(0x%016lx, 0x%016llx, 0x%016lx)\n", __func__, va, pa, pgprot_val(flags));
 }
 
 static void __init
 cea_map_percpu_pages(void *cea_vaddr, void *ptr, int pages, pgprot_t prot)
 {
+	printk("%s(0x%016lx, 0x%016lx, %d, 0x%016lx)\n", __func__, (unsigned long)cea_vaddr, (unsigned long)ptr, pages, pgprot_val(prot));
 	for ( ; pages; pages--, cea_vaddr+= PAGE_SIZE, ptr += PAGE_SIZE)
 		cea_set_pte(cea_vaddr, per_cpu_ptr_to_phys(ptr), prot);
 }
@@ -163,11 +166,12 @@ static void __init percpu_setup_exception_stacks(unsigned int cpu)
 		}
 	}
 
-	if (cpu_feature_enabled(X86_FEATURE_SHSTK)) {
+	printk("doing cea map_stack for shadow_stack\n");
+	//if (cpu_feature_enabled(X86_FEATURE_USER_SHSTK)) {
 		cea_map_stack(DB,  shadow_stack, PAGE_KERNEL_SHSTK);
 		cea_map_stack(NMI, shadow_stack, PAGE_KERNEL_SHSTK);
 		cea_map_stack(DF,  shadow_stack, PAGE_KERNEL_SHSTK);
-	}
+	//}
 }
 #else
 static void __init percpu_setup_exception_stacks(unsigned int cpu)
