@@ -172,6 +172,15 @@ static union thread_union *task_thread_union(struct task_struct *tsk)
         return (union thread_union *)task_stack_page(tsk);
 }
 
+static unsigned long *task_kshstk_base(struct task_struct *tsk)
+{
+	return (unsigned long *)&task_thread_union(tsk)->stacks.shadow_stack[0];
+}
+static unsigned long *task_kshstk_top(struct task_struct *tsk)
+{
+	return (unsigned long *)&task_thread_union(tsk)->stacks.shadow_stack[TASK_SHADOW_STACK_SIZE / sizeof(unsigned long)];
+}
+
 /*
  * The goal here is to build a shadow stack for the new thread. It
  * just need to survive the first RET from ret_from_fork_asm().
@@ -193,14 +202,14 @@ static void *prep_kernel_shadow_stack(struct task_struct *tsk)
 	ss_top = shstk_base_writable + TASK_SHADOW_STACK_SIZE;
 	/* Back up one ulong from the end to write the first return pointer: */
 	ss_top_slot = (unsigned long *)ss_top - 1;
-
 	/* Write the return address for the first RET: */
 	*ss_top_slot = (unsigned long)ret_from_fork_asm;
 
 	printk("prep_kernel_shadow_stack: tsk=%p, shstk_base_vmap=%p, shstk_base_writable=%p, ss_top=%p, ss_top_slot=%p\n",
 	       tsk, shstk_base_vmap, shstk_base_writable, ss_top, ss_top_slot);
 
-	return ss_top_slot;
+	// hack for now. This needs to be more coherent
+	return shstk_base_vmap + TASK_SHADOW_STACK_SIZE - sizeof(unsigned long);
 }
 
 int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)

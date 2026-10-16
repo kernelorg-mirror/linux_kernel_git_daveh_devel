@@ -170,7 +170,7 @@ SYM_INNER_LABEL(entry_SYSRETQ_end, SYM_L_GLOBAL)
 SYM_CODE_END(entry_SYSCALL_64)
 
 .macro SAVE_KERNEL_SHADOW_STACK
-#ifdef CONFIG_X86_KERNEL_SHSTK
+#ifdef CONFIG_X86_USER_SHADOW_STACK
 	/* kshstk_ssp==0 means no kernel shadow stack, skip handling */
 	cmpq	$0, TASK_thread_kshstk_ssp(%rdi)
 	je	.Lprev_no_shstk\@
@@ -194,6 +194,8 @@ SYM_CODE_END(entry_SYSCALL_64)
 	wrmsr
 .endm
 
+#define SHSTK_TOKEN_MODE64	_BITULL(0)	/* created in 64-bit mode */
+
 /*
  * Clobbers rax, rcx, rdx, r8, r9. rdi/rsi must survive for __switch_to.
  *
@@ -201,7 +203,7 @@ SYM_CODE_END(entry_SYSCALL_64)
  * be made.
  */
 .macro LOAD_KERNEL_SHADOW_STACK
-#ifdef CONFIG_X86_KERNEL_SHSTK
+#ifdef CONFIG_X86_USER_SHADOW_STACK
 	movq	TASK_thread_kshstk_ssp(%rsi), %r8
 	testq	%r8, %r8
 	jz	.Lnext_no_shstk\@
