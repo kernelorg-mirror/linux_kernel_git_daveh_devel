@@ -56,6 +56,17 @@ static inline void arch_exit_work(unsigned long ti_work)
 		switch_fpu_return();
 }
 
+static union thread_union *__task_thread_union(struct task_struct *tsk)
+{
+        return (union thread_union *)task_stack_page(tsk);
+}
+
+static inline void *task_shstk_top(struct task_struct *tsk)
+{
+        return __task_thread_union(tsk)->stacks.shadow_stack +
+                sizeof(__task_thread_union(tsk)->stacks.shadow_stack);
+}
+
 static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,
 						  unsigned long ti_work)
 {
@@ -65,7 +76,8 @@ static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,
 		arch_exit_work(ti_work);
 
 	fred_update_rsp0();
-
+	if (current->thread.kshstk_ssp)
+		wrmsrns(MSR_IA32_FRED_SSP0, (u64)task_shstk_top(current));
 #ifdef CONFIG_COMPAT
 	/*
 	 * Compat syscalls set TS_COMPAT.  Make sure we clear it before
