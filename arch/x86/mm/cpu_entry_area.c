@@ -130,10 +130,10 @@ static void __init percpu_setup_debug_store(unsigned int cpu)
 
 #ifdef CONFIG_X86_64
 
-#define cea_map_stack(name, type, perm) do {					\
-	npages = sizeof(estacks->name## _stack) / PAGE_SIZE;		\
-	cea_map_percpu_pages(cea->estacks.name## _stack,		\
-			estacks->name## _stack, npages, PAGE_KERNEL);	\
+#define cea_map_stack(name, type, perm) do {				\
+	npages = sizeof(estacks->name## _ ##type) / PAGE_SIZE;		\
+	cea_map_percpu_pages(cea->estacks.name## _ ##type,		\
+			estacks->name## _ ##type, npages, perm);	\
 	} while (0)
 
 static void __init percpu_setup_exception_stacks(unsigned int cpu)
