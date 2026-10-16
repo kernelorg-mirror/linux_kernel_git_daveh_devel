@@ -233,6 +233,13 @@ struct thread_stacks;
 static inline void arch_init_thread_stacks(struct thread_stacks *ts) { }
 #endif
 
+#ifndef arch_kernel_shstk_enabled
+static inline void arch_kernel_shstk_enabled(void)
+{
+	return false;
+}
+#endif
+
 void arch_task_cache_init(void); /* for CONFIG_SH */
 void arch_release_task_struct(struct task_struct *tsk);
 int arch_dup_task_struct(struct task_struct *dst,
