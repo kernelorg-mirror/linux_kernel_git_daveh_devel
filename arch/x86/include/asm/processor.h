@@ -561,6 +561,13 @@ static __always_inline void native_swapgs(void)
 #endif
 }
 
+// Hijack the user config option for the moment
+#ifdef CONFIG_X86_USER_SHADOW_STACK
+struct thread_stacks;
+void arch_init_thread_stacks(struct thread_stacks *ts);
+#define arch_init_thread_stacks arch_init_thread_stacks
+#endif
+
 static __always_inline unsigned long current_top_of_stack(void)
 {
 	/*
