@@ -1051,6 +1051,14 @@ static void local_apic_timer_interrupt(void)
 	evt->event_handler(evt);
 }
 
+static __always_inline unsigned long rdssp(void)
+{
+	unsigned long ssp = 0;
+
+	asm volatile("rdsspq %0" : "+r" (ssp));
+	return ssp;
+}
+
 /*
  * Local APIC timer interrupt. This is the most natural way for doing
  * local interrupts, but local timer interrupts can be emulated by
@@ -1062,6 +1070,10 @@ static void local_apic_timer_interrupt(void)
 DEFINE_IDTENTRY_SYSVEC(sysvec_apic_timer_interrupt)
 {
 	struct pt_regs *old_regs = set_irq_regs(regs);
+
+	trace_printk("timer: cpu%d %s ip=%pS ssp=%lx\n",
+			smp_processor_id(), current->comm,
+			(void *)regs->ip, rdssp());
 
 	apic_eoi();
 	trace_local_timer_entry(LOCAL_TIMER_VECTOR);
