@@ -183,7 +183,7 @@ static void printk_prot(struct seq_file *m, pgprotval_t pr, int level, bool dmsg
 
 	if (!(pr & _PAGE_PRESENT)) {
 		/* Not present */
-		pt_dump_cont_printf(m, dmsg, "                              ");
+		pt_dump_cont_printf(m, dmsg, "                                ");
 	} else {
 		if (pr & _PAGE_USER)
 			pt_dump_cont_printf(m, dmsg, "USR ");
@@ -193,6 +193,10 @@ static void printk_prot(struct seq_file *m, pgprotval_t pr, int level, bool dmsg
 			pt_dump_cont_printf(m, dmsg, "RW ");
 		else
 			pt_dump_cont_printf(m, dmsg, "ro ");
+		if (pr & _PAGE_DIRTY)
+			pt_dump_cont_printf(m, dmsg, "D ");
+		else
+			pt_dump_cont_printf(m, dmsg, "  ");
 		if (pr & _PAGE_PWT)
 			pt_dump_cont_printf(m, dmsg, "PWT ");
 		else
