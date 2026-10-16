@@ -272,3 +272,14 @@ config UNWINDER_GUESS
 	  overhead.
 
 endchoice
+
+config X86_KERNEL_SHSTK_KUNIT_TEST
+	tristate "KUnit test for kernel shadow stack mapping" # if !KUNIT_ALL_TESTS
+	depends on KUNIT
+	#&& X86_KERNEL_SHADOW_STACK
+	default y
+	#<- for now # KUNIT_ALL_TESTS
+	help
+	  Verifies that per-thread kernel shadow stacks are mapped with
+	  shadow-stack page attributes (Write=0, Dirty=1) and are not
+	  writable via ordinary stores.
