@@ -566,6 +566,12 @@ static __always_inline void native_swapgs(void)
 struct thread_stacks;
 void arch_init_thread_stacks(struct thread_stacks *ts);
 #define arch_init_thread_stacks arch_init_thread_stacks
+void arch_kernel_shstk_enabled(void)
+{
+	// runtime enabling checke
+	//return cpu_feature_enabled(X86_FEATURE_SHSTK??);
+	return true;
+}
 #endif
 
 static __always_inline unsigned long current_top_of_stack(void)
