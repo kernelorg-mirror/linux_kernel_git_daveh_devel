@@ -234,7 +234,7 @@ static inline void arch_init_thread_stacks(struct thread_stacks *ts) { }
 #endif
 
 #ifndef arch_kernel_shstk_enabled
-static inline void arch_kernel_shstk_enabled(void)
+static inline bool arch_kernel_shstk_enabled(void)
 {
 	return false;
 }
