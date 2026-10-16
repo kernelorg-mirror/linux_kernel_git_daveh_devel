@@ -330,6 +330,13 @@ err:
 	return ret;
 }
 
+static void *__vmalloc_thread_stack_node(int node)
+{
+	return __vmalloc_node(THREAD_SIZE, THREAD_ALIGN,
+			      GFP_VMAP_STACK,
+			      node, __builtin_return_address(0));
+}
+
 static int alloc_thread_stack_node(struct task_struct *tsk, int node)
 {
 	struct vm_struct *vm_area;
@@ -356,9 +363,7 @@ static int alloc_thread_stack_node(struct task_struct *tsk, int node)
 		return 0;
 	}
 
-	stack = __vmalloc_node(THREAD_SIZE, THREAD_ALIGN,
-				     GFP_VMAP_STACK,
-				     node, __builtin_return_address(0));
+	stack = __vmalloc_thread_stack_node(node);
 	if (!stack)
 		return -ENOMEM;
 
