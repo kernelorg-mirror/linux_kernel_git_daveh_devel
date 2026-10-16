@@ -5533,6 +5533,12 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	switch_to(prev, next, prev);
 	barrier();
 
+	{
+		unsigned long ssp = 0;
+		asm volatile("rdsspq %0" : "+r" (ssp));
+		trace_printk("switch: %s ssp=%lx\n", current->comm, ssp);
+	}
+
 	return finish_task_switch(prev);
 }
 
