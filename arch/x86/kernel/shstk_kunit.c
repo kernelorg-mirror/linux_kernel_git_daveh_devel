@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * KUnit test for the per-thread kernel shadow stack mapping.
+ *
+ * Mostly Claude-generated goo
  */
 #include <kunit/test.h>
 #include <linux/sched/task_stack.h>
@@ -11,11 +13,6 @@
 static union thread_union *task_thread_union(struct task_struct *tsk)
 {
 	return (union thread_union *)task_stack_page(tsk);
-}
-
-static void *task_shstk_base(struct task_struct *tsk)
-{
-	return task_thread_union(tsk)->stacks.shadow_stack;
 }
 
 /* Are there any helpers around for this? */
@@ -84,8 +81,9 @@ static void shstk_pte_is_shadow_stack(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, ptep);
 	KUNIT_EXPECT_EQ(test, level, (unsigned int)PG_LEVEL_4K);
 	KUNIT_EXPECT_TRUE(test, pte_present(*ptep));
-	KUNIT_EXPECT_FALSE(test, pte_write(*ptep));
-	KUNIT_EXPECT_TRUE(test, pte_dirty(*ptep));	/* Write=0,Dirty=1 == shstk */
+	KUNIT_EXPECT_TRUE(test, pte_dirty(*ptep)); // shstk pages are always D=1
+	KUNIT_EXPECT_TRUE(test, pte_write(*ptep)); // kernel considers them writable
+	KUNIT_EXPECT_FALSE(test, pte_flags(*ptep) & _PAGE_RW); // although RW=0
 }
 
 static struct kunit_case shstk_test_cases[] = {
