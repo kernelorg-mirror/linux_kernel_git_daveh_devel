@@ -43,6 +43,9 @@ static void __used common(void)
 
 	BLANK();
 	OFFSET(TASK_threadsp, task_struct, thread.sp);
+//ifdef CONFIG_X86_KERNEL_SHSTK
+	OFFSET(TASK_thread_kshstk_ssp, task_struct, thread.kshstk_ssp);
+//endif
 #ifdef CONFIG_STACKPROTECTOR
 	OFFSET(TASK_stack_canary, task_struct, stack_canary);
 #endif
