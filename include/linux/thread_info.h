@@ -228,6 +228,11 @@ static inline int arch_within_stack_frames(const void * const stack,
 static inline void arch_setup_new_exec(void) { }
 #endif
 
+struct thread_stacks;
+#ifndef arch_init_thread_stacks
+static inline void arch_init_thread_stacks(struct thread_stacks *ts) { }
+#endif
+
 void arch_task_cache_init(void); /* for CONFIG_SH */
 void arch_release_task_struct(struct task_struct *tsk);
 int arch_dup_task_struct(struct task_struct *dst,

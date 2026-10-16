@@ -15,6 +15,15 @@
 #define THREAD_SIZE_ORDER	(2 + KASAN_STACK_ORDER)
 #define THREAD_SIZE  (PAGE_SIZE << THREAD_SIZE_ORDER)
 
+/*
+ * Define this whenever kernel shadow stacks are config'd on. This
+ * will create a "hole" in the end of the vmap stack allocation
+ * but it is harmless except for a wee bit less dense vmalloc area.
+ */
+#ifdef CONFIG_X86_USER_SHADOW_STACK
+#define TASK_SHADOW_STACK_SIZE PAGE_SIZE
+#endif
+
 #define EXCEPTION_STACK_ORDER (1 + KASAN_STACK_ORDER)
 #define EXCEPTION_STKSZ (PAGE_SIZE << EXCEPTION_STACK_ORDER)
 
