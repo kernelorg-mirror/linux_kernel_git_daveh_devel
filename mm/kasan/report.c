@@ -365,9 +365,9 @@ static inline bool kernel_or_module_addr(const void *addr)
 
 static inline bool init_task_stack_addr(const void *addr)
 {
-	return addr >= (void *)&init_thread_union.stack &&
-		(addr <= (void *)&init_thread_union.stack +
-			sizeof(init_thread_union.stack));
+	return addr >= (void *)&init_thread_union.stacks.stack &&
+		(addr <= (void *)&init_thread_union.stacks.stack +
+			sizeof(init_thread_union.stacks.stack));
 }
 
 static void print_address_description(void *addr, u8 tag,
