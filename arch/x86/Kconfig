@@ -1865,6 +1865,9 @@ config X86_USER_SHADOW_STACK
 
 	  If unsure, say N.
 
+config X86_KERN_SHADOW_STACK
+	def_bool n
+
 config INTEL_TDX_HOST
 	bool "Intel Trust Domain Extensions (TDX) host support"
 	depends on CPU_SUP_INTEL

@@ -205,3 +205,8 @@ config X86_DISABLED_FEATURE_SEV_SNP
 config X86_DISABLED_FEATURE_INVLPGB
 	def_bool y
 	depends on !BROADCAST_TLB_FLUSH
+
+config X86_DISABLED_FEATURE_KERN_SHSTK
+        def_bool y
+        depends on !X86_KERN_SHADOW_STACK
+
