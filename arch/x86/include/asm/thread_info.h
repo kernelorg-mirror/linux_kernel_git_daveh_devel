@@ -228,4 +228,11 @@ extern void arch_setup_new_exec(void);
 #define arch_setup_new_exec arch_setup_new_exec
 #endif	/* !__ASSEMBLER__ */
 
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+struct thread_stacks;
+extern void arch_init_thread_stacks(struct thread_stacks *ts);
+#define arch_init_thread_stacks arch_init_thread_stacks
+#endif
+
+
 #endif /* _ASM_X86_THREAD_INFO_H */
