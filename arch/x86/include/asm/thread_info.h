@@ -234,5 +234,10 @@ extern void arch_init_thread_stacks(struct thread_stacks *ts);
 #define arch_init_thread_stacks arch_init_thread_stacks
 #endif
 
+bool arch_kernel_shstk_enabled(void)
+{
+	return cpu_feature_enabled(X86_FEATURE_KERN_SHSTK);
+}
+#define arch_init_thread_stacks arch_init_thread_stacks
 
 #endif /* _ASM_X86_THREAD_INFO_H */
