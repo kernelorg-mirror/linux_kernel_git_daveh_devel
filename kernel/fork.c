@@ -315,7 +315,7 @@ static int memcg_charge_kernel_stack(struct vm_struct *vm_area)
 	int ret;
 	int nr_charged = 0;
 
-	BUG_ON(vm_area->nr_pages != THREAD_SIZE / PAGE_SIZE);
+	BUG_ON(vm_area->nr_pages != sizeof(union thread_union) / PAGE_SIZE);
 
 	for (i = 0; i < THREAD_SIZE / PAGE_SIZE; i++) {
 		ret = memcg_kmem_charge_page(vm_area->pages[i], GFP_KERNEL, 0);
@@ -332,7 +332,7 @@ err:
 
 static void *__vmalloc_thread_stack_node(int node)
 {
-	return __vmalloc_node(THREAD_SIZE, THREAD_ALIGN,
+	return __vmalloc_node(sizeof(union thread_union), THREAD_ALIGN,
 			      GFP_VMAP_STACK,
 			      node, __builtin_return_address(0));
 }
