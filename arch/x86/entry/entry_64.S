@@ -169,6 +169,64 @@ SYM_INNER_LABEL(entry_SYSRETQ_end, SYM_L_GLOBAL)
 	int3
 SYM_CODE_END(entry_SYSCALL_64)
 
+.macro SAVE_KERNEL_SHADOW_STACK
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+	/* kshstk_ssp==0 means no kernel shadow stack, skip handling */
+	cmpq	$0, TASK_thread_kshstk_ssp(%rdi)
+	je	.Lprev_no_shstk\@
+	rdsspq	%rax
+	movq	%rax, TASK_thread_kshstk_ssp(%rdi)
+.Lprev_no_shstk\@:
+#endif
+.endm
+
+.macro ENABLE_KERNEL_SHADOW_STACK
+	movl	$MSR_IA32_S_CET, %ecx
+	rdmsr
+	orl	$(CET_SHSTK_EN | CET_WRSS_EN), %eax
+	wrmsr
+.endm
+
+.macro DISABLE_KERNEL_SHADOW_STACK
+	movl	$MSR_IA32_S_CET, %ecx
+	rdmsr
+	andl	$~(CET_SHSTK_EN | CET_WRSS_EN), %eax
+	wrmsr
+.endm
+
+/*
+ * Clobbers rax, rcx, rdx, r8, r9. rdi/rsi must survive for __switch_to.
+ *
+ * Dumb and slow. Always does WRMSR, regardless of if changes need to
+ * be made.
+ */
+.macro LOAD_KERNEL_SHADOW_STACK
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+	movq	TASK_thread_kshstk_ssp(%rsi), %r8
+	testq	%r8, %r8
+	jz	.Lnext_no_shstk\@
+
+	ENABLE_KERNEL_SHADOW_STACK
+
+	/* Build a restore token and write it to the shadow stack: */
+	leaq	-8(%r8), %r9
+	movq	%r8, %rax
+	orq	$SHSTK_TOKEN_MODE64, %rax
+	wrssq	%rax, (%r9)
+
+	rstorssp (%r9)
+
+	/* Discard the Previous-SSP token left by RSTORSSP */
+	movl	$1, %eax
+	incsspq	%rax
+	jmp	.Lshstk_done\@
+
+.Lnext_no_shstk\@:
+	DISABLE_KERNEL_SHADOW_STACK
+.Lshstk_done\@:
+#endif
+.endm
+
 /*
  * %rdi: prev task
  * %rsi: next task
@@ -191,6 +249,8 @@ SYM_FUNC_START(__switch_to_asm)
 	movq	%rsp, TASK_threadsp(%rdi)
 	movq	TASK_threadsp(%rsi), %rsp
 
+	SAVE_KERNEL_SHADOW_STACK
+
 #ifdef CONFIG_STACKPROTECTOR
 	movq	TASK_stack_canary(%rsi), %rbx
 	movq	%rbx, PER_CPU_VAR(__stack_chk_guard)
@@ -204,6 +264,9 @@ SYM_FUNC_START(__switch_to_asm)
 	 * speculative execution to prevent attack.
 	 */
 	FILL_RETURN_BUFFER %r12, RSB_CLEAR_LOOPS, X86_FEATURE_RSB_CTXSW
+
+	/* Note that this clobbers tons of stuff: */
+	LOAD_KERNEL_SHADOW_STACK
 
 	/* restore callee-saved registers */
 	popq	%r15
