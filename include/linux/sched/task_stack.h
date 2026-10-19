@@ -23,6 +23,11 @@ static __always_inline void *task_stack_page(const struct task_struct *task)
 	return task->stack;
 }
 
+static inline union thread_union *task_thread_union(struct task_struct *tsk)
+{
+        return (union thread_union *)task_stack_page(tsk);
+}
+
 #define setup_thread_stack(new,old)	do { } while(0)
 
 static __always_inline unsigned long *end_of_stack(const struct task_struct *task)
