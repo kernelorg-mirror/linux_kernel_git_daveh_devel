@@ -130,10 +130,10 @@ static void __init percpu_setup_debug_store(unsigned int cpu)
 
 #ifdef CONFIG_X86_64
 
-#define cea_map_stack(name) do {					\
-	npages = sizeof(estacks->name## _stack) / PAGE_SIZE;		\
-	cea_map_percpu_pages(cea->estacks.name## _stack,		\
-			estacks->name## _stack, npages, PAGE_KERNEL);	\
+#define cea_map_stack(name, type, perm) do {					\
+	npages = sizeof(estacks->name## _ ##type) / PAGE_SIZE;		\
+	cea_map_percpu_pages(cea->estacks.name## _ ##type,		\
+			estacks->name## _ ##type, npages, PAGE_KERNEL);	\
 	} while (0)
 
 static void __init percpu_setup_exception_stacks(unsigned int cpu)
@@ -151,15 +151,15 @@ static void __init percpu_setup_exception_stacks(unsigned int cpu)
 	 * by guard pages so each stack must be mapped separately. DB2 is
 	 * not mapped; it just exists to catch triple nesting of #DB.
 	 */
-	cea_map_stack(DF);
-	cea_map_stack(NMI);
-	cea_map_stack(DB);
-	cea_map_stack(MCE);
+	cea_map_stack(DF,  stack, PAGE_KERNEL);
+	cea_map_stack(NMI, stack, PAGE_KERNEL);
+	cea_map_stack(DB,  stack, PAGE_KERNEL);
+	cea_map_stack(MCE, stack, PAGE_KERNEL);
 
 	if (IS_ENABLED(CONFIG_AMD_MEM_ENCRYPT)) {
 		if (cc_platform_has(CC_ATTR_GUEST_STATE_ENCRYPT)) {
-			cea_map_stack(VC);
-			cea_map_stack(VC2);
+			cea_map_stack(VC,  stack, PAGE_KERNEL);
+			cea_map_stack(VC2, stack, PAGE_KERNEL);
 		}
 	}
 }
