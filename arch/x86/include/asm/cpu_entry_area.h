@@ -10,6 +10,12 @@
 
 #ifdef CONFIG_X86_64
 
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+#define EXCEPTION_SHADOW_STKSZ	PAGE_SIZE
+#else
+#define EXCEPTION_SHADOW_STKSZ	0
+#endif
+
 #ifdef CONFIG_AMD_MEM_ENCRYPT
 #define VC_EXCEPTION_STKSZ	EXCEPTION_STKSZ
 #else
@@ -19,10 +25,13 @@
 /* Macro to enforce the same ordering and stack sizes */
 #define ESTACKS_MEMBERS(guardsize, optional_stack_size)		\
 	char	DF_stack_guard[guardsize];			\
+	char	DF_shadow_stack[EXCEPTION_SHADOW_STKSZ];	\
 	char	DF_stack[EXCEPTION_STKSZ];			\
 	char	NMI_stack_guard[guardsize];			\
+	char	NMI_shadow_stack[EXCEPTION_SHADOW_STKSZ];	\
 	char	NMI_stack[EXCEPTION_STKSZ];			\
 	char	DB_stack_guard[guardsize];			\
+	char	DB_shadow_stack[EXCEPTION_SHADOW_STKSZ];	\
 	char	DB_stack[EXCEPTION_STKSZ];			\
 	char	MCE_stack_guard[guardsize];			\
 	char	MCE_stack[EXCEPTION_STKSZ];			\

@@ -87,4 +87,11 @@ void cpu_init_fred_rsps(void)
 	wrmsrq(MSR_IA32_FRED_RSP1, __this_cpu_ist_top_va(DB));
 	wrmsrq(MSR_IA32_FRED_RSP2, __this_cpu_ist_top_va(NMI));
 	wrmsrq(MSR_IA32_FRED_RSP3, __this_cpu_ist_top_va(DF));
+
+	if (!cpu_feature_enabled(X86_FEATURE_KERN_SHSTK))
+		return;
+
+	wrmsrq(MSR_IA32_FRED_SSP1, __this_cpu_shadow_top_va(DB));
+	wrmsrq(MSR_IA32_FRED_SSP2, __this_cpu_shadow_top_va(NMI));
+	wrmsrq(MSR_IA32_FRED_SSP3, __this_cpu_shadow_top_va(DF));
 }
