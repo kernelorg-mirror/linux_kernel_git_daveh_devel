@@ -303,6 +303,13 @@ static __always_inline void tile_release(void)
 	asm volatile(".byte 0xc4, 0xe2, 0x78, 0x49, 0xc0");
 }
 
+static __always_inline void wrss(u64 val, u64 *addr)
+{
+	asm volatile("wrssq %[val], %[addr]"
+		     : [addr] "=m" (*addr)
+		     : [val] "r" (val));
+}
+
 #endif /* __KERNEL__ */
 
 #endif /* _ASM_X86_SPECIAL_INSNS_H */

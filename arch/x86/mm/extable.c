@@ -38,7 +38,7 @@ static bool ex_handler_default(const struct exception_table_entry *e,
 	if (e->data & EX_FLAG_CLEAR_DX)
 		regs->dx = 0;
 
-	regs->ip = ex_fixup_addr(e);
+	regs_set_return_ip(regs, ex_fixup_addr(e));
 	return true;
 }
 
