@@ -55,19 +55,20 @@ enum exception_stack_ordering {
 	N_EXCEPTION_STACKS
 };
 
-#define CEA_ESTACK_SIZE(st)					\
-	sizeof(((struct cea_exception_stacks *)0)->st## _stack)
+#define CEA_ESTACK_SIZE(st, member)					\
+	sizeof(((struct cea_exception_stacks *)0)->st## _ ##member)
 
-#define CEA_ESTACK_BOT(ceastp, st)				\
-	((unsigned long)&(ceastp)->st## _stack)
+#define CEA_ESTACK_BOT(ceastp, st, member)				\
+	((unsigned long)&(ceastp)->st## _ ##member)
 
-#define CEA_ESTACK_TOP(ceastp, st)				\
-	(CEA_ESTACK_BOT(ceastp, st) + CEA_ESTACK_SIZE(st))
+#define CEA_ESTACK_TOP(ceastp, st, member)				\
+	(CEA_ESTACK_BOT(ceastp, st, member) +				\
+	 CEA_ESTACK_SIZE(st, member))
 
-#define CEA_ESTACK_OFFS(st)					\
-	offsetof(struct cea_exception_stacks, st## _stack)
+#define CEA_ESTACK_OFFS(st, member)					\
+	offsetof(struct cea_exception_stacks, st## _ ##member)
 
-#define CEA_ESTACK_PAGES					\
+#define CEA_ESTACK_PAGES						\
 	(sizeof(struct cea_exception_stacks) / PAGE_SIZE)
 
 #endif
@@ -145,9 +146,9 @@ static __always_inline struct entry_stack *cpu_entry_stack(int cpu)
 }
 
 #define __this_cpu_ist_top_va(name)					\
-	CEA_ESTACK_TOP(__this_cpu_read(cea_exception_stacks), name)
+	CEA_ESTACK_TOP(__this_cpu_read(cea_exception_stacks), name, stack)
 
 #define __this_cpu_ist_bottom_va(name)					\
-	CEA_ESTACK_BOT(__this_cpu_read(cea_exception_stacks), name)
+	CEA_ESTACK_BOT(__this_cpu_read(cea_exception_stacks), name, stack)
 
 #endif
