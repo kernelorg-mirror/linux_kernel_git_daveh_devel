@@ -1865,6 +1865,40 @@ config X86_USER_SHADOW_STACK
 
 	  If unsure, say N.
 
+# Kernel shadow stacks make the CPU check every RET against a second,
+# hardware-maintained stack of return addresses. Anything that
+# "returns" somewhere other than where the matching CALL came from
+# takes a #CP. That rules out a surprising amount of kernel code. The
+# dependencies below exclude all of it at build time. Each one names
+# the construct that breaks so it can be revisited when that code is
+# taught about shadow stacks.
+#
+# Examined and believed compatible, so NOT excluded here:
+#  - MITIGATION_RETHUNK: __x86_return_thunk is a plain RET.
+#  - MITIGATION_UNRET_ENTRY: retbleed_return_thunk is a plain RET and
+#    entry_untrain_ret is a balanced CALL/RET.
+#  - MITIGATION_ITS: the ITS indirect thunks are JMPs and
+#    its_return_thunk is a plain RET. (its=stuff is caught at runtime
+#    via X86_FEATURE_CALL_DEPTH.)
+#  - MITIGATION_SPECTRE_BHI: clear_bhb_loop() is balanced CALL/RET.
+#  - MITIGATION_PAGE_TABLE_ISOLATION: PTI clears X86_FEATURE_FRED at
+#    runtime and kernel shadow stacks require FRED, so the two can
+#    never be active together.
+#  - X86_KERNEL_IBT, X86_USER_SHADOW_STACK: separate CET controls.
+#
+# Known gaps that Kconfig can not express and that the design must
+# still handle:
+#  - text_poke_bp() CALL emulation (int3_emulate_call(), used by
+#    static_call and ftrace call-site patching and by the boot-time
+#    int3_selftest()) pushes the return address only on the regular
+#    stack.
+#  - Any code that writes regs->ip directly instead of going through
+#    regs_set_return_ip() leaves the FRED shadow stack frame stale.
+#  - The RSB_CTXSW RSB fill in __switch_to_asm pushes 32 bogus shadow
+#    stack entries. It is survivable only because SSP is reloaded
+#    with RSTORSSP immediately afterwards.
+#  - EFI runtime services run firmware code that is not shadow stack
+#    aware while kernel shadow stacks are live.
 config X86_KERN_SHADOW_STACK
 	bool "X86 kernel shadow stack"
 	depends on X86_FRED # implies X86_64
@@ -1873,6 +1907,79 @@ config X86_KERN_SHADOW_STACK
 	depends on VMAP_STACK
 	depends on AS_WRUSS
 	select X86_CET
+	# The retpoline sequence is "call; mov %reg,(%rsp); ret": the
+	# CALL pushes a shadow stack entry and the RET then uses a
+	# rewritten return address. Mismatch every time.
+	depends on !MITIGATION_RETPOLINE
+	# The indirect call thunks are retpoline-based (see above) and
+	# call_depth_return_thunk() refills the RSB with 16 CALLs, then
+	# does "add $128,%rsp; ret", leaving 16 stale shadow stack entries.
+	depends on !MITIGATION_CALL_DEPTH_TRACKING
+	# Safe-RET is "call srso_safe_ret" followed by
+	# "lea 8(%rsp),%rsp; ret": the RET consumes the caller's return
+	# address while the shadow stack top holds the CALL's.
+	depends on !MITIGATION_SRSO
+	# Replaces return addresses on the stack with return_to_handler,
+	# and return_to_handler itself returns with a retpoline-style
+	# "call; mov %rdi,(%rsp); ret".
+	depends on !FUNCTION_GRAPH_TRACER
+	# kprobe_emulate_call(), kprobe_emulate_ret() and
+	# kprobe_emulate_call_indirect() emulate CALL and RET by moving
+	# the return address on the regular stack only. KRETPROBES and
+	# OPTPROBES hang off this symbol as well.
+	depends on !KPROBES
+	# arch_rethook_trampoline() is a return address hijack: the
+	# probed function RETs to the trampoline instead of its caller.
+	# FPROBE selects RETHOOK.
+	depends on !RETHOOK
+	depends on !FPROBE
+	# klp_ftrace_handler() redirects execution by changing the
+	# ftrace_regs IP. ftrace_regs_caller writes that IP into the
+	# return slot and RETs to it, but the shadow stack still holds
+	# the original address.
+	depends on !LIVEPATCH
+	# override_function_with_return() points regs->ip at
+	# just_return_func, a bare RET that pops the probed function's
+	# return address without the function's own RET ever running.
+	depends on !FUNCTION_ERROR_INJECTION
+	# BPF trampolines with BPF_TRAMP_F_SKIP_FRAME do "add $8,%rsp; ret"
+	# to return to the grandparent. bpf_throw() unwinds BPF frames by
+	# walking the stack and resuming at the exception callback with
+	# the unwound RSP, skipping the intervening RETs.
+	depends on !BPF_JIT
+	# relocate_kernel() switches CR3 and CR4 with a shadow stack live
+	# and uses "pushq $0 ... ret" as the handoff into purgatory. It
+	# needs S_CET.SH_STK_EN cleared first, which nothing does yet.
+	depends on !KEXEC_CORE
+	# restore_registers() RETs on a stack reloaded from the image
+	# with S_CET, the PLx/FRED_SSPx MSRs and SSP itself never saved or
+	# restored. Same problem for do_suspend_lowlevel()/wakeup_long64(),
+	# which resume with "jmp *%rax" into the middle of the function
+	# and then RET.
+	depends on !HIBERNATION
+	depends on !SUSPEND
+	# __efi64_thunk() drops into 32-bit firmware with LRETQ and comes
+	# back with LRET. Far returns are shadow stack checked and expect
+	# a far CALL frame that was never pushed.
+	depends on !EFI_MIXED
+	# KVM snapshots host S_CET at load, refuses to load if SH_STK_EN
+	# is set (kvm_x86_vendor_init()), and VMX programs HOST_SSP=0 for
+	# every VM-exit. vmenter.S also runs FILL_RETURN_BUFFER before
+	# its RET when RSB_VMEXIT or RSB_VMEXIT_LITE is active.
+	depends on !KVM
+	# PV guests run the kernel in ring 3 without FRED. Kernel shadow
+	# stacks are FRED-only.
+	depends on !XEN_PV
+	# kgdb_arch_set_pc() writes regs->ip directly rather than through
+	# regs_set_return_ip(), so the FRED shadow stack frame goes stale.
+	# The breakpoint and single-step paths have not been audited.
+	depends on !KGDB
+	help
+	  Shadow stacks for the kernel itself. Every CALL pushes the
+	  return address on a second, hardware-protected stack and every
+	  RET checks it. Requires FRED. See the comments above for the
+	  long list of kernel features this is currently incompatible
+	  with.
 
 config INTEL_TDX_HOST
 	bool "Intel Trust Domain Extensions (TDX) host support"
