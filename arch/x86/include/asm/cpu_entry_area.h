@@ -17,7 +17,7 @@
 #endif
 
 /* Macro to enforce the same ordering and stack sizes */
-#define ESTACKS_MEMBERS(guardsize, optional_stack_size)		\
+#define ESTACKS_MEMBERS(guardsize)				\
 	char	DF_stack_guard[guardsize];			\
 	char	DF_stack[EXCEPTION_STKSZ];			\
 	char	NMI_stack_guard[guardsize];			\
@@ -27,19 +27,19 @@
 	char	MCE_stack_guard[guardsize];			\
 	char	MCE_stack[EXCEPTION_STKSZ];			\
 	char	VC_stack_guard[guardsize];			\
-	char	VC_stack[optional_stack_size];			\
+	char	VC_stack[VC_EXCEPTION_STKSZ];			\
 	char	VC2_stack_guard[guardsize];			\
-	char	VC2_stack[optional_stack_size];			\
+	char	VC2_stack[VC_EXCEPTION_STKSZ];			\
 	char	IST_top_guard[guardsize];			\
 
 /* The exception stacks' physical storage. No guard pages required */
 struct exception_stacks {
-	ESTACKS_MEMBERS(0, VC_EXCEPTION_STKSZ)
+	ESTACKS_MEMBERS(0)
 };
 
 /* The effective cpu entry area mapping with guard pages. */
 struct cea_exception_stacks {
-	ESTACKS_MEMBERS(PAGE_SIZE, EXCEPTION_STKSZ)
+	ESTACKS_MEMBERS(PAGE_SIZE)
 };
 
 /*

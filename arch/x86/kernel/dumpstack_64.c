@@ -87,8 +87,10 @@ struct estack_pages estack_pages[CEA_ESTACK_PAGES] ____cacheline_aligned = {
 	EPAGERANGE(NMI),
 	EPAGERANGE(DB),
 	EPAGERANGE(MCE),
+#ifdef CONFIG_AMD_MEM_ENCRYPT
 	EPAGERANGE(VC),
 	EPAGERANGE(VC2),
+#endif
 };
 
 static __always_inline bool in_exception_stack(unsigned long *stack, struct stack_info *info)
