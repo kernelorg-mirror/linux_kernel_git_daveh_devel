@@ -15,6 +15,15 @@
 #define THREAD_SIZE_ORDER	(2 + KASAN_STACK_ORDER)
 #define THREAD_SIZE  (PAGE_SIZE << THREAD_SIZE_ORDER)
 
+/*
+ * Grow 'thread_union' to make space for the shadow stack
+ * page. For now, this wastes a page of space per task on
+ * systems that do not support shadow stacks.
+ */
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+#define TASK_SHADOW_STACK_SIZE PAGE_SIZE
+#endif
+
 #define EXCEPTION_STACK_ORDER (1 + KASAN_STACK_ORDER)
 #define EXCEPTION_STKSZ (PAGE_SIZE << EXCEPTION_STACK_ORDER)
 
