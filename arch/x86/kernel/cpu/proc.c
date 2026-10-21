@@ -6,6 +6,7 @@
 #include <linux/cpufreq.h>
 #include <asm/prctl.h>
 #include <linux/proc_fs.h>
+#include <linux/sched/task_stack.h>
 
 #include "cpu.h"
 
@@ -181,6 +182,7 @@ const struct seq_operations cpuinfo_op = {
 	.show	= show_cpuinfo,
 };
 
+#if defined(CONFIG_X86_USER_SHADOW_STACK) || defined(CONFIG_X86_KERN_SHADOW_STACK)
 #ifdef CONFIG_X86_USER_SHADOW_STACK
 static void dump_x86_features(struct seq_file *m, unsigned long features)
 {
@@ -190,7 +192,7 @@ static void dump_x86_features(struct seq_file *m, unsigned long features)
 		seq_puts(m, "wrss ");
 }
 
-void arch_proc_pid_thread_features(struct seq_file *m, struct task_struct *task)
+static void dump_user_shstk(struct seq_file *m, struct task_struct *task)
 {
 	seq_puts(m, "x86_Thread_features:\t");
 	dump_x86_features(m, task->thread.features);
@@ -200,4 +202,29 @@ void arch_proc_pid_thread_features(struct seq_file *m, struct task_struct *task)
 	dump_x86_features(m, task->thread.features_locked);
 	seq_putc(m, '\n');
 }
-#endif /* CONFIG_X86_USER_SHADOW_STACK */
+#else
+static inline void dump_user_shstk(struct seq_file *m, struct task_struct *task) { }
+#endif
+
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+/*
+ * Debugging: dump the task's kernel shadow stack pointer and the top of
+ * its shadow stack. thread.kshstk_ssp is only saved when the task is
+ * switched out, so it is stale for a running task, including a task
+ * reading its own status. NULL means no kernel shadow stack.
+ */
+static void dump_kernel_shstk(struct seq_file *m, struct task_struct *task)
+{
+	seq_printf(m, "x86_kshstk_ssp:\t%px\n", task->thread.kshstk_ssp);
+	seq_printf(m, "x86_kshstk_top:\t%px\n", task_shstk_top(task));
+}
+#else
+static inline void dump_kernel_shstk(struct seq_file *m, struct task_struct *task) { }
+#endif
+
+void arch_proc_pid_thread_features(struct seq_file *m, struct task_struct *task)
+{
+	dump_user_shstk(m, task);
+	dump_kernel_shstk(m, task);
+}
+#endif /* CONFIG_X86_USER_SHADOW_STACK || CONFIG_X86_KERN_SHADOW_STACK */
