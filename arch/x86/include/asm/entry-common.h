@@ -65,7 +65,7 @@ static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,
 		arch_exit_work(ti_work);
 
 	fred_update_rsp0();
-
+	fred_update_ssp0();
 #ifdef CONFIG_COMPAT
 	/*
 	 * Compat syscalls set TS_COMPAT.  Make sure we clear it before
