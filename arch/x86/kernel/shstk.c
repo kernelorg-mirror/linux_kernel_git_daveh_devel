@@ -630,3 +630,24 @@ bool shstk_is_enabled(void)
 {
 	return features_enabled(ARCH_SHSTK_SHSTK);
 }
+
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+static inline int set_shstk_pte(pte_t *ptep, unsigned long addr, void *data)
+{
+	set_pte(ptep, pte_mkwrite_shstk(pte_wrprotect(ptep_get(ptep))));
+	return 0;
+}
+
+void arch_init_thread_stacks(struct thread_stacks *ts)
+{
+	unsigned long shstk_vaddr = (unsigned long)&ts->shadow_stack;
+	unsigned long shstk_size  = sizeof(ts->shadow_stack);
+
+	if (!cpu_feature_enabled(X86_FEATURE_KERN_SHSTK))
+		return;
+
+	apply_to_existing_page_range(&init_mm, shstk_vaddr, shstk_size,
+				     set_shstk_pte, NULL);
+	flush_tlb_kernel_range(shstk_vaddr, shstk_vaddr + shstk_size);
+}
+#endif
