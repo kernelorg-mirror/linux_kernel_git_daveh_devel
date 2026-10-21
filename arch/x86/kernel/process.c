@@ -167,6 +167,40 @@ __visible void ret_from_fork(struct task_struct *prev, struct pt_regs *regs,
 	syscall_exit_to_user_mode(regs);
 }
 
+/*
+ * The goal here is to build a shadow stack for the new thread. It
+ * just needs to survive the first RET from ret_from_fork_asm().
+ */
+static void prep_kernel_shadow_stack(struct task_struct *tsk)
+{
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+	unsigned long *ss_top_slot;
+	u8 *shstk_base_writable;
+	u8 *shstk_base_vmap;
+	u8 *ss_top;
+
+	if (!cpu_feature_enabled(X86_FEATURE_KERN_SHSTK))
+		return;
+
+	/* Start with the shadow stack permission mapping: */
+	shstk_base_vmap = &task_thread_union(tsk)->stacks.shadow_stack[0];
+
+	/* Walk the page tables and find the direct map alias of the sshstk */
+	shstk_base_writable = page_address(vmalloc_to_page(shstk_base_vmap));
+
+	/* Point at the end of the shadow stack: */
+	ss_top = shstk_base_writable + TASK_SHADOW_STACK_SIZE;
+	/* Back up one ulong from the end to write the first return pointer: */
+	ss_top_slot = (unsigned long *)ss_top - 1;
+
+	/* Write the return address for the first RET: */
+	*ss_top_slot = (unsigned long)ret_from_fork_asm;
+
+	// Needs helper?
+	tsk->thread.kshstk_ssp = shstk_base_vmap + TASK_SHADOW_STACK_SIZE - sizeof(unsigned long);
+#endif
+}
+
 int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 {
 	u64 clone_flags = args->flags;
@@ -185,6 +219,7 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	frame->bp = encode_frame_pointer(childregs);
 	frame->ret_addr = (unsigned long) ret_from_fork_asm;
 	p->thread.sp = (unsigned long) fork_frame;
+	prep_kernel_shadow_stack(p);
 	p->thread.io_bitmap = NULL;
 	clear_tsk_thread_flag(p, TIF_IO_BITMAP);
 	p->thread.iopl_warn = 0;
