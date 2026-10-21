@@ -332,9 +332,17 @@ err:
 
 static void *__vmalloc_thread_stack_node(int node)
 {
-	return __vmalloc_node(sizeof(union thread_union), THREAD_ALIGN,
-			      GFP_VMAP_STACK,
-			      node, __builtin_return_address(0));
+	union thread_union *tu;
+
+	tu = __vmalloc_node(sizeof(union thread_union), THREAD_ALIGN,
+			    GFP_VMAP_STACK,
+			    node, __builtin_return_address(0));
+	if (!tu)
+		return NULL;
+
+	arch_init_thread_stacks(&tu->stacks);
+
+	return tu;
 }
 
 static int alloc_thread_stack_node(struct task_struct *tsk, int node)
