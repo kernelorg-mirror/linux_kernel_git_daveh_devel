@@ -1603,3 +1603,37 @@ SYM_FUNC_START(clear_bhb_loop)
 SYM_FUNC_END(clear_bhb_loop)
 EXPORT_SYMBOL_FOR_KVM(clear_bhb_loop)
 STACK_FRAME_NON_STANDARD(clear_bhb_loop)
+
+/*
+ * Turn on kernel shadow stacks and WRSS. Clobbers %eax, %ecx and %edx.
+ * SSP is stale until a RSTORSSP follows.
+ */
+.macro ENABLE_KERNEL_SHADOW_STACK
+	movl	$MSR_IA32_S_CET, %ecx
+	rdmsr
+	orl	$(CET_SHSTK_EN | CET_WRSS_EN), %eax
+	wrmsr
+.endm
+
+SYM_FUNC_START(kshstk_enable_current)
+	FRAME_BEGIN
+
+	/*
+	 * Snapshot RSP for the unwinder before the CALL, so nothing the
+	 * compiler does in kshstk_build() can move it.
+	 */
+	movq	%rsp, %rdi
+	call	kshstk_build
+	/* Stash the kshstk address before ENABLE clobbers it: */
+	movq	%rax, %r8
+
+	ENABLE_KERNEL_SHADOW_STACK
+	/* Set actual SSP register, convert Restore=>Prev-SSP token: */
+	rstorssp (%r8)
+	/* Remove Prev-SSP Token from shadow stack: */
+	movl	$1, %eax
+	incsspq	%rax
+
+	FRAME_END
+	RET
+SYM_FUNC_END(kshstk_enable_current)

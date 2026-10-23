@@ -4,8 +4,10 @@
 #include <asm/bugs.h>
 #include <asm/msr.h>
 #include <asm/traps.h>
+#include <asm/unwind.h>
 #include <asm/insn-eval.h>
 #include <asm/special_insns.h>
+#include <asm/set_memory.h>
 
 enum cp_error_code {
 	CP_EC        = (1 << 15) - 1,
@@ -213,4 +215,139 @@ void regs_set_return_ip(struct pt_regs *regs, unsigned long ip)
 		return;
 
 	wrss(ip, &ssef->ssef_lip);
+}
+
+static inline void *task_shadow_stack(struct task_struct *task)
+{
+	return &task_thread_union(current)->stacks.shadow_stack[0];
+}
+
+static inline unsigned long shadow_stack_size(void)
+{
+	return sizeof(task_thread_union(current)->stacks.shadow_stack);
+}
+
+static inline unsigned long *task_shstk_slot(int nr)
+{
+	unsigned long *top = task_shstk_top(current);
+
+	return &top[-1 - nr];
+}
+
+static unsigned long *shstk_alias(unsigned long *addr)
+{
+	struct page *page;
+
+	/* Most shadow stacks are vmap'd: */
+	page = vmalloc_to_page(addr);
+	/* init_task is not a vmalloc address */
+	if (!is_vmalloc_addr(addr))
+		page = virt_to_page(addr);
+
+	return page_address(page) + offset_in_page(addr);
+}
+
+static void shstk_create_restore_token(unsigned long *ro_slot)
+{
+	unsigned long *rw_slot = shstk_alias(ro_slot);
+	unsigned long restore_token;
+
+	/*
+	 * The token value is based on the actual read-only shadow
+	 * stack address, but points one slot *above* itself:
+	 */
+	restore_token = (unsigned long)(ro_slot + 1) | SHSTK_TOKEN_MODE64;
+
+	/* Write the token to the r/w alias: */
+	*rw_slot = restore_token;
+}
+
+#define KSHSTK_MAX_ENTS 64
+
+/*
+ * Use the unwinder infrastructure to walk back up the regular stack
+ * and mirror all the return addresses over to the shadow stack.
+ *
+ * root_sp is captured in assembly before calling here to prevent the
+ * compiler from messing with it. There may be additional frames or
+ * other gunk on the stack below root_sp by the time the unwinder
+ * starts, but those will ignored. All that matters is that the stack
+ * is back to "root_sp" when shadow stacks are enabled.
+ */
+asmlinkage void kshstk_build(unsigned long *root_sp)
+{
+	unsigned long ents[KSHSTK_MAX_ENTS];
+	struct unwind_state state;
+	unsigned long *ro_slot;
+	unsigned long *rw_slot;
+	int n = 0;
+
+	/*
+	 * Use the unwinder to find the return addresses of callers.
+	 * Note that ents[0] is the most recent call. The is the
+	 * opposite of stacks. ents[] is tempoarary "upside down"
+	 * storage that will be reversed when copied to the shadow
+	 * stack.
+	 */
+	for (unwind_start(&state, current, NULL, root_sp);
+	     !unwind_done(&state) && n < KSHSTK_MAX_ENTS;
+	     unwind_next_frame(&state))
+		ents[n++] = unwind_get_return_address(&state);
+
+	BUG_ON(n == KSHSTK_MAX_ENTS);
+
+	/* Transfer the return addresses to the shadow stack: */
+	ro_slot = task_shstk_slot(0);
+	rw_slot = shstk_alias(ro_slot);
+	for (int i = n - 1; i >= 0; i--) {
+		*rw_slot = ents[i];
+		rw_slot--;
+		ro_slot--;
+	}
+	/* Put a restore token in the last slot: */
+	shstk_create_restore_token(ro_slot);
+}
+
+static void kshstk_prepare_pages(void)
+{
+	/*
+	 * Necessary for the init_task shadow stack on the boot CPU,
+	 * but not the secondary CPUs which have normal vmap'd stacks.
+	 */
+	set_memory_shstk_noalias((unsigned long)task_shadow_stack(current),
+				 shadow_stack_size() / PAGE_SIZE);
+}
+
+/*
+ * This "locks" the stack in place and does not allow any control
+ * flow manipulation to occur because of changes to the stack.
+ *
+ * CPU enters with shadow stacks disabled and leaves with them
+ * enabled.
+ *
+ * Must be called before the CPU does its first context switch.
+ */
+void arch_kernel_stack_lock_current(void)
+{
+	unsigned long flags;
+
+	if (!cpu_feature_enabled(X86_FEATURE_KERN_SHSTK))
+		return;
+
+	kshstk_prepare_pages();
+
+	/*
+	 * Regular interrupts are delivered on stack level 0. There
+	 * is a window within the enabling where CET_SHSTK_EN=1 but
+	 * SSP is not yet set. If an interrupt is delivered in that
+	 * window, it would try to push on to this stack. Disable
+	 * regular interrupts over this window.
+	 *
+	 * Interrupts that use other stack levels (like NMI) are OK
+	 * because FRED switches stacks for them and does not push
+	 * on stack level 0.
+	 */
+	local_irq_save(flags);
+	current->thread.kshstk_ssp = kshstk_enable_current();
+	local_irq_restore(flags);
 }

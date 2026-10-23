@@ -28,6 +28,10 @@ int shstk_update_last_frame(unsigned long val);
 bool shstk_is_enabled(void);
 int shstk_pop(u64 *val);
 int shstk_push(u64 val);
+
+asmlinkage __visible void kshstk_build(unsigned long *);
+void arch_kernel_stack_lock_current(void);
+void *kshstk_enable_current(void);
 #else
 static inline long shstk_prctl(struct task_struct *task, int option,
 			       unsigned long arg2) { return -EINVAL; }
@@ -42,6 +46,7 @@ static inline int shstk_update_last_frame(unsigned long val) { return 0; }
 static inline bool shstk_is_enabled(void) { return false; }
 static inline int shstk_pop(u64 *val) { return -ENOTSUPP; }
 static inline int shstk_push(u64 val) { return -ENOTSUPP; }
+static inline void arch_kernel_stack_lock_current(void) {}
 #endif /* CONFIG_X86_USER_SHADOW_STACK */
 
 #endif /* __ASSEMBLER__ */
