@@ -69,10 +69,11 @@ struct estack_pages {
 };
 
 #define EPAGERANGE(st)							\
-	[PFN_DOWN(CEA_ESTACK_OFFS(st)) ...				\
-	 PFN_DOWN(CEA_ESTACK_OFFS(st) + CEA_ESTACK_SIZE(st) - 1)] = {	\
-		.offs	= CEA_ESTACK_OFFS(st),				\
-		.size	= CEA_ESTACK_SIZE(st),				\
+	[PFN_DOWN(CEA_ESTACK_OFFS(st, stack)) ...			\
+	 PFN_DOWN(CEA_ESTACK_OFFS(st, stack) +				\
+		  CEA_ESTACK_SIZE(st, stack) - 1)] = {			\
+		.offs	= CEA_ESTACK_OFFS(st, stack),			\
+		.size	= CEA_ESTACK_SIZE(st, stack),			\
 		.type	= STACK_TYPE_EXCEPTION + ESTACK_ ##st, }
 
 /*
