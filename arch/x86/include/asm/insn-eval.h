@@ -82,4 +82,16 @@ static inline void insn_assign_reg(unsigned long *reg, u64 val, int bytes)
 	}
 }
 
+#ifdef CONFIG_X86_CET
+void regs_set_return_ip(struct pt_regs *regs, unsigned long ip);
+#else
+static inline void regs_set_return_ip(struct pt_regs *regs, unsigned long ip)
+{
+	/* This is only for changing kernel return addresses: */
+	WARN_ON_ONCE(user_mode(regs));
+
+	regs->ip = ip;
+}
+#endif
+
 #endif /* _ASM_X86_INSN_EVAL_H */

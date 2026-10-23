@@ -4,6 +4,8 @@
 #include <asm/bugs.h>
 #include <asm/msr.h>
 #include <asm/traps.h>
+#include <asm/insn-eval.h>
+#include <asm/special_insns.h>
 
 enum cp_error_code {
 	CP_EC        = (1 << 15) - 1,
@@ -159,4 +161,56 @@ DEFINE_IDTENTRY_ERRORCODE(exc_control_protection)
 		else
 			do_unexpected_cp(regs, error_code);
 	}
+}
+
+/*
+ * FRED hardware pushes this frame on to the shadow stack for
+ * kernel=>kernel entry. First (lowest address) in this struct
+ * is the last entry pushed by the hardware.
+ */
+struct fred_shstk_entry_frame {
+	u64 ssef_ssp;
+	u64 ssef_lip;
+	u64 ssef_cs;
+};
+
+/*
+ * The kernel=>kernel entry code pushes SSP on to the entry stack.
+ * This only occurs for kernel=>kernel entry. Not userspace.
+ *
+ * SSP is pushed on to the frame below pt_regs. At the point it is
+ * pushed, it points to a special FRED entry frame.
+ */
+struct fred_kernel_frame {
+	struct fred_shstk_entry_frame *ssef;
+	struct pt_regs regs;
+};
+
+/*
+ * Change the return IP of an event. Use this instead of directly
+ * manipulating regs->ip.
+ *
+ * The hardware saves a special FRED entry frame on to the shadow
+ * stack. It contains the RIP of the interrupted context. ERETS
+ * ensures that this matches regs->ip.
+ *
+ * Update the FRED entry frame in addition to regs->ip.
+ */
+void regs_set_return_ip(struct pt_regs *regs, unsigned long ip)
+{
+	struct fred_shstk_entry_frame *ssef;
+
+	regs->ip = ip;
+
+	if (!cpu_feature_enabled(X86_FEATURE_KERN_SHSTK))
+		return;
+
+	/* Only kernel-mode events save the 'ssef' pointer. */
+	WARN_ON_ONCE(user_mode(regs));
+
+	ssef = container_of(regs, struct fred_kernel_frame, regs)->ssef;
+	if (!ssef)
+		return;
+
+	wrss(ip, &ssef->ssef_lip);
 }
