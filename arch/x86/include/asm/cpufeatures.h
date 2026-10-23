@@ -309,10 +309,10 @@
 #define X86_FEATURE_SMBA		(11*32+21) /* Slow Memory Bandwidth Allocation */
 #define X86_FEATURE_BMEC		(11*32+22) /* Bandwidth Monitoring Event Configuration */
 #define X86_FEATURE_USER_SHSTK		(11*32+23) /* "user_shstk" Shadow stack support for user mode applications */
-#define X86_FEATURE_SRSO		(11*32+24) /* AMD BTB untrain RETs */
-#define X86_FEATURE_SRSO_ALIAS		(11*32+25) /* AMD BTB untrain RETs through aliasing */
-#define X86_FEATURE_IBPB_ON_VMEXIT	(11*32+26) /* Issue an IBPB only on VMEXIT */
-#define X86_FEATURE_APIC_MSRS_FENCE	(11*32+27) /* IA32_TSC_DEADLINE and X2APIC MSRs need fencing */
+#define X86_FEATURE_KERN_SHSTK		(11*32+24) /* Kernel Shadow stack support */
+#define X86_FEATURE_SRSO		(11*32+25) /* AMD BTB untrain RETs */
+#define X86_FEATURE_SRSO_ALIAS		(11*32+26) /* AMD BTB untrain RETs through aliasing */
+#define X86_FEATURE_IBPB_ON_VMEXIT	(11*32+27) /* Issue an IBPB only on VMEXIT */
 #define X86_FEATURE_ZEN2		(11*32+28) /* CPU based on Zen2 microarchitecture */
 #define X86_FEATURE_ZEN3		(11*32+29) /* CPU based on Zen3 microarchitecture */
 #define X86_FEATURE_ZEN4		(11*32+30) /* CPU based on Zen4 microarchitecture */
@@ -430,6 +430,7 @@
 #define X86_FEATURE_SUCCOR		(17*32+ 1) /* "succor" Uncorrectable error containment and recovery */
 #define X86_FEATURE_CPPC_PERF_PRIO	(17*32+ 2) /* CPPC Floor Perf support */
 #define X86_FEATURE_SMCA		(17*32+ 3) /* "smca" Scalable MCA */
+#define X86_FEATURE_APIC_MSRS_FENCE	(17*32+ 4) /* IA32_TSC_DEADLINE and X2APIC MSRs need fencing */
 
 /* Intel-defined CPU features, CPUID level 0x00000007:0 (EDX), word 18 */
 #define X86_FEATURE_AVX512_4VNNIW	(18*32+ 2) /* "avx512_4vnniw" AVX-512 Neural Network Instructions */

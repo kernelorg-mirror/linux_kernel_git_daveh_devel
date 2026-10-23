@@ -1865,6 +1865,15 @@ config X86_USER_SHADOW_STACK
 
 	  If unsure, say N.
 
+config X86_KERN_SHADOW_STACK
+	bool "X86 kernel shadow stack"
+	depends on X86_FRED # implies X86_64
+	# Shadow stacks are allocated next to the
+	# regular stack in the VMAP area:
+	depends on VMAP_STACK
+	depends on AS_WRUSS
+	select X86_CET
+
 config INTEL_TDX_HOST
 	bool "Intel Trust Domain Extensions (TDX) host support"
 	depends on CPU_SUP_INTEL
