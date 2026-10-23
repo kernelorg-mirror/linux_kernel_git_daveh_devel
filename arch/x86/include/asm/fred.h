@@ -105,6 +105,13 @@ static __always_inline void fred_update_rsp0(void)
 		__this_cpu_write(fred_rsp0, rsp0);
 	}
 }
+static __always_inline void fred_update_ssp0(void)
+{
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+	if (current->thread.kshstk_ssp)
+		wrmsrns(MSR_IA32_FRED_SSP0, (u64)task_shstk_top(current));
+#endif
+}
 #else /* CONFIG_X86_FRED */
 static __always_inline unsigned long fred_event_data(struct pt_regs *regs) { return 0; }
 static inline void cpu_init_fred_exceptions(void) { }
@@ -112,6 +119,7 @@ static inline void cpu_init_fred_rsps(void) { }
 static inline void fred_complete_exception_setup(void) { }
 static inline void fred_sync_rsp0(unsigned long rsp0) { }
 static inline void fred_update_rsp0(void) { }
+static inline void fred_update_ssp0(void) { }
 #endif /* CONFIG_X86_FRED */
 #endif /* !__ASSEMBLER__ */
 
