@@ -170,6 +170,33 @@ SYM_INNER_LABEL(entry_SYSRETQ_end, SYM_L_GLOBAL)
 SYM_CODE_END(entry_SYSCALL_64)
 
 /*
+ * Switch the kernel shadow stack from prev (%rdi) to next (%rsi).
+ *
+ * Do three things:
+ * 1. Fetch next SSP from next->thread.kshstk_ssp
+ * 2. Stash prev SSP into prev->thread.kshstk_ssp
+ * 3. Uses the SSP save/restore ISA to swap the SSP register itself.
+ *    The ISA is a bit convoluted and indirect but it is designed
+ *    to be resistant to things like two tasks running on the same
+ *    stack.
+ */
+.macro SWITCH_KERNEL_SHADOW_STACK
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+	ALTERNATIVE "jmp .Lkshstk_done_\@", "", X86_FEATURE_KERN_SHSTK
+	/* Save previous shadow stack: */
+	rdsspq		%rax
+	movq		%rax, TASK_thread_kshstk_ssp(%rdi)
+
+	movq		TASK_thread_kshstk_ssp(%rsi), %rax
+	/* Atomically consume the "Restore Token" on next stack: */
+	rstorssp	-8(%rax)
+	/* Pop the Prev-SSP (was a "Restore") token from next stack: */
+	saveprevssp
+.Lkshstk_done_\@:
+#endif
+.endm
+
+/*
  * %rdi: prev task
  * %rsi: next task
  */
@@ -190,6 +217,8 @@ SYM_FUNC_START(__switch_to_asm)
 	/* switch stack */
 	movq	%rsp, TASK_threadsp(%rdi)
 	movq	TASK_threadsp(%rsi), %rsp
+
+	SWITCH_KERNEL_SHADOW_STACK
 
 #ifdef CONFIG_STACKPROTECTOR
 	movq	TASK_stack_canary(%rsi), %rbx
