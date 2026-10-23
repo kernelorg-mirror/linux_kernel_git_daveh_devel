@@ -2417,6 +2417,21 @@ int set_memory_global(unsigned long addr, int numpages)
 }
 
 /*
+ * Make pages at 'addr' shadow stack memory, Write=0 and Dirty=1.
+ *
+ * Leave the direct map alias is left alone, so it stays writable.
+ * Used at least for init_task's statically allocated shadow stack
+ * page.
+ */
+int set_memory_shstk_noalias(unsigned long addr, int numpages)
+{
+	return change_page_attr_set_clr(&addr, numpages,
+					__pgprot(_PAGE_DIRTY),	/* set */
+					__pgprot(_PAGE_RW),	/* clear */
+					0, CPA_NO_CHECK_ALIAS, NULL);
+}
+
+/*
  * __set_memory_enc_pgtable() is used for the hypervisors that get
  * informed about "encryption" status via page tables.
  */
