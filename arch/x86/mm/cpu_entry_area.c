@@ -162,6 +162,11 @@ static void __init percpu_setup_exception_stacks(unsigned int cpu)
 			cea_map_stack(VC2, stack, PAGE_KERNEL);
 		}
 	}
+
+	/* Map the per-CPU exception shadow stacks: */
+	cea_map_stack(DB,  shadow_stack, PAGE_KERNEL_SHSTK);
+	cea_map_stack(NMI, shadow_stack, PAGE_KERNEL_SHSTK);
+	cea_map_stack(DF,  shadow_stack, PAGE_KERNEL_SHSTK);
 }
 #else
 static void __init percpu_setup_exception_stacks(unsigned int cpu)

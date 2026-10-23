@@ -87,4 +87,18 @@ void cpu_init_fred_rsps(void)
 	wrmsrq(MSR_IA32_FRED_RSP1, __this_cpu_ist_top_va(DB));
 	wrmsrq(MSR_IA32_FRED_RSP2, __this_cpu_ist_top_va(NMI));
 	wrmsrq(MSR_IA32_FRED_RSP3, __this_cpu_ist_top_va(DF));
+
+	if (!cpu_has(&boot_cpu_data, X86_FEATURE_SHSTK))
+		return;
+
+	/*
+	 * ...and the FRED shadow stacks when supported by the CPU.
+	 *
+	 * Note that this is strictly checking CPU support, not the
+	 * kernel feature flag: X86_FEATURE_KERN_SHSTK. These MSRs
+	 * may get set and then never used.
+	 */
+	wrmsrq(MSR_IA32_FRED_SSP1, __this_cpu_shadow_top_va(DB));
+	wrmsrq(MSR_IA32_FRED_SSP2, __this_cpu_shadow_top_va(NMI));
+	wrmsrq(MSR_IA32_FRED_SSP3, __this_cpu_shadow_top_va(DF));
 }
