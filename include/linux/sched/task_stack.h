@@ -114,4 +114,22 @@ static inline int kstack_end(void *addr)
 	return !(((unsigned long)addr+sizeof(void*)-1) & (THREAD_SIZE-sizeof(void*)));
 }
 
+static inline union thread_union *task_thread_union(struct task_struct *tsk)
+{
+        return (union thread_union *)task_stack_page(tsk);
+}
+
+/*
+ * Return the address of the top of the shadow stack for a task.
+ *
+ * Note that this is the address just above the last shadow stack
+ * slot. It is an invalid address and needs to be decremented by
+ * something before actual use.
+ */
+static inline void *task_shstk_top(struct task_struct *tsk)
+{
+        return task_thread_union(tsk)->stacks.shadow_stack +
+                sizeof(task_thread_union(tsk)->stacks.shadow_stack);
+}
+
 #endif /* _LINUX_SCHED_TASK_STACK_H */
