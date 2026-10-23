@@ -188,6 +188,18 @@ SECTIONS
 		/* equivalent to task_pt_regs(&init_task) */
 		__top_init_kernel_stack = __end_init_stack - TOP_OF_KERNEL_STACK_PADDING - PTREGS_SIZE;
 
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+		/*
+		 * init_thread_union has a shadow stack page directly after
+		 * the regular stack. INIT_TASK_DATA() only reserves
+		 * THREAD_SIZE, so reserve the rest of the union here. Nothing
+		 * may be placed between the two.
+		 */
+		__init_shadow_stack = .;
+		. = __start_init_stack + THREAD_UNION_SIZE;
+		__end_init_shadow_stack = .;
+#endif
+
 #ifdef CONFIG_X86_32
 		/* 32 bit has nosave before _edata */
 		NOSAVE_DATA
@@ -509,6 +521,10 @@ PROVIDE(__ref_stack_chk_guard = __stack_chk_guard);
 
 #if defined(CONFIG_MITIGATION_ITS) && !defined(CONFIG_DEBUG_FORCE_FUNCTION_ALIGN_64B)
 . = ASSERT(its_return_thunk & 0x20, "its_return_thunk not in second half of cacheline");
+#endif
+
+#ifdef CONFIG_X86_KERN_SHADOW_STACK
+. = ASSERT(__init_shadow_stack == __end_init_stack, "init shadow stack is not adjacent to init_stack");
 #endif
 
 #endif /* CONFIG_X86_64 */

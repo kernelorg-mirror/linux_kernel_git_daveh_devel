@@ -110,6 +110,7 @@ static void __used common(void)
 	OFFSET(BP_pref_address, boot_params, hdr.pref_address);
 
 	BLANK();
+	DEFINE(THREAD_UNION_SIZE, sizeof(union thread_union));
 	DEFINE(PTREGS_SIZE, sizeof(struct pt_regs));
 	OFFSET(C_PTREGS_SIZE, pt_regs, orig_ax);
 
