@@ -2,6 +2,9 @@
 #ifndef _ASM_X86_SHSTK_H
 #define _ASM_X86_SHSTK_H
 
+#define SHSTK_TOKEN_MODE64	BIT_ULL(0) /* Token created in 64-bit mode */
+#define SHSTK_TOKEN_TYPE	BIT_ULL(1) /* Types: Restore: 0, Prev-SSP: 1 */
+
 #ifndef __ASSEMBLER__
 #include <linux/types.h>
 
