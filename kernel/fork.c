@@ -387,6 +387,10 @@ static void free_thread_stack(struct task_struct *tsk)
 	tsk->stack_vm_area = NULL;
 }
 
+void __init thread_stack_cache_init(void)
+{
+}
+
 #else /* !CONFIG_VMAP_STACK */
 
 static struct kmem_cache *thread_stack_cache;

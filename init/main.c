@@ -779,12 +779,6 @@ void __init __weak smp_prepare_boot_cpu(void)
 {
 }
 
-# if THREAD_SIZE >= PAGE_SIZE
-void __init __weak thread_stack_cache_init(void)
-{
-}
-#endif
-
 void __init __weak poking_init(void) { }
 
 void __init __weak pgtable_cache_init(void) { }
