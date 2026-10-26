@@ -389,44 +389,6 @@ static void free_thread_stack(struct task_struct *tsk)
 
 #else /* !CONFIG_VMAP_STACK */
 
-/*
- * Allocate pages if THREAD_SIZE is >= PAGE_SIZE, otherwise use a
- * kmemcache based allocator.
- */
-#if THREAD_SIZE >= PAGE_SIZE
-
-static void thread_stack_free_rcu(struct rcu_head *rh)
-{
-	__free_pages(virt_to_page(rh), THREAD_SIZE_ORDER);
-}
-
-static void thread_stack_delayed_free(struct task_struct *tsk)
-{
-	struct rcu_head *rh = tsk->stack;
-
-	call_rcu(rh, thread_stack_free_rcu);
-}
-
-static int alloc_thread_stack_node(struct task_struct *tsk, int node)
-{
-	struct page *page = alloc_pages_node(node, THREADINFO_GFP,
-					     THREAD_SIZE_ORDER);
-
-	if (likely(page)) {
-		tsk->stack = kasan_reset_tag(page_address(page));
-		return 0;
-	}
-	return -ENOMEM;
-}
-
-static void free_thread_stack(struct task_struct *tsk)
-{
-	thread_stack_delayed_free(tsk);
-	tsk->stack = NULL;
-}
-
-#else /* !(THREAD_SIZE >= PAGE_SIZE) */
-
 static struct kmem_cache *thread_stack_cache;
 
 static void thread_stack_free_rcu(struct rcu_head *rh)
@@ -458,13 +420,15 @@ static void free_thread_stack(struct task_struct *tsk)
 
 void thread_stack_cache_init(void)
 {
+	/* Ensure stacks (especially >PAGE_SIZE ones) are a power-of-2: */
+	BUILD_BUG_ON_NOT_POWER_OF_2(THREAD_SIZE);
+
 	thread_stack_cache = kmem_cache_create_usercopy("thread_stack",
 					THREAD_SIZE, THREAD_SIZE, 0, 0,
 					THREAD_SIZE, NULL);
 	BUG_ON(thread_stack_cache == NULL);
 }
 
-#endif /* THREAD_SIZE >= PAGE_SIZE */
 #endif /* CONFIG_VMAP_STACK */
 
 /* SLAB cache for signal_struct structures (tsk->signal) */
